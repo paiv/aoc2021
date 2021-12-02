@@ -11,6 +11,11 @@ def part2(data):
     return sum(y > x for x,y in zip(ys, ys[1:]))
 
 
+def part2(data):
+    xs = list(map(int, data.split()))
+    return sum(y > x for x,y in zip(xs, xs[3:]))
+
+
 data = '''
 199
 200
