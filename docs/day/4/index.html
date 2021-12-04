@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Day 4: Giant Squid</title>
+
+<style media="screen">
+:root {--bg:#fff; --fg:#000; --lb:#b8b8b8;}
+@media (prefers-color-scheme:dark) {:root {--bg:#202124;--fg:#f1f3f4;--lb:#5F626B}}
+body, body * {background:var(--bg); color:var(--fg);}
+textarea {width: 10em; height: 40em; white-space: pre; margin-top:1em;}
+#gfx {user-select:none;}
+.flx {display:flex;}
+.fm {display:flex; flex-direction:column;}
+.fm button {margin-left: 1em; margin-top: 2em;}
+.draw {display:flex; flex-flow:row wrap; width:80%; margin-left:2em;}
+.draw .x {display:flex; justify-content:center; align-items:center;
+    width:1.6em; height:1.6em;}
+.grid {display:flex; flex-flow:row wrap;}
+.card {display:flex; flex-flow:row wrap; margin:1em; border:1px var(--fg) solid;
+    width:11em; height:11em;}
+.card .tt {position:absolute; font-size:smaller; min-width:0.8em; height:1em;
+    text-align:center; background:var(--fg); color:var(--bg);}
+.card .x {display:flex; justify-content:center; align-items:center; margin:0.2em;
+    width:1.8em; height:1.8em;}
+@keyframes bglb {from {background-color:var(--bg);} to {background-color:var(--lb);}}
+.hi, .hi span {animation:bglb 0.25s ease-out 1; background-color:var(--lb);}
+.hi span {font-weight:bolder;}
+</style>
+
+</head>
+<body>
+
+<a href="https://adventofcode.com/2021/day/4">aoc:day/4</a>
+
+<div class="flx">
+
+<div>
+    <textarea id="input">7,4,9,5,11,17,23,2,0,14,21,24,10,16,13,6,15,25,12,22,18,20,8,19,3,26,1
+
+22 13 17 11  0
+ 8  2 23  4 24
+21  9 14 16  7
+ 6 10  3 18  5
+ 1 12 20 15 19
+
+ 3 15  0  2 22
+ 9 18 13 17  5
+19  8  7 25 23
+20 11 10 24  4
+14 21 16 12  6
+
+14 21 17 24  4
+10 16 15  9 19
+18  8 23 26 20
+22 11 13  6  5
+ 2  0 12  3  7
+</textarea>
+</div>
+
+<div class="fm">
+    <button type="button" id="play" name="play">Play</button>
+    <button type="button" id="draw" name="draw">Draw</button>
+    <button type="button" id="undo" name="undo">Undo</button>
+</div>
+
+<div id="gfx">
+</div>
+
+</div>
+
+<script type="text/javascript">
+let Draw = new Array()
+let Called = new Array()
+function mrotate(m) {
+    return m[0].map((_, i) => m.map(row => row[i]).reverse())
+}
+function startGame() {
+    document.querySelector('.fm button').blur()
+    const board = document.querySelector('#gfx')
+    while (board.firstChild) {
+        board.removeChild(board.lastChild)
+    }
+
+    let input = document.getElementById('input').value
+    let [draw,...boards] = input.trim().split(/\n\n/)
+    draw = draw.trim().split(',').map(x => parseInt(x))
+    Draw = draw
+    Called = new Array()
+    boards = boards.map(s => s.trim().split('\n')
+        .map(l => l.trim().split(/\s+/).map(x => parseInt(x))))
+
+    let drel = document.createElement('div')
+    drel.classList.add('draw')
+    for (let x of draw) {
+        let num = document.createElement('div')
+        num.classList.add('x')
+        num.classList.add('x'+x)
+        let s = document.createElement('span')
+        s.innerText = x
+        num.appendChild(s)
+        drel.appendChild(num)
+    }
+    board.appendChild(drel)
+
+    let grid = document.createElement('div')
+    grid.classList.add('grid')
+    for (let [bi, bs] of boards.entries()) {
+        let card = document.createElement('div')
+        card.classList.add('card')
+        let tt = document.createElement('span')
+        tt.classList.add('tt')
+        tt.innerText = bi
+        tt.title = bi
+        card.appendChild(tt)
+        for (let rs of bs) {
+            for (let x of rs) {
+                let num = document.createElement('div')
+                num.classList.add('x')
+                num.classList.add('x'+x)
+                let s = document.createElement('span')
+                s.innerText = x
+                num.appendChild(s)
+                card.appendChild(num)
+            }
+        }
+        grid.appendChild(card)
+    }
+    board.appendChild(grid)
+}
+function drawNext() {
+    if (!Draw.length) { return }
+    let x = Draw.shift()
+    Called.push(x)
+    for (let el of document.querySelectorAll('.x' + x)) {
+        el.classList.add('hi')
+    }
+}
+function undoPrev() {
+    if (!Called.length) { return }
+    let x = Called.pop()
+    Draw.unshift(x)
+    for (let el of document.querySelectorAll('.x' + x)) {
+        el.classList.remove('hi')
+    }
+}
+function setupApp() {
+    document.querySelector('.fm #play').addEventListener('click', startGame)
+    document.querySelector('.fm #draw').addEventListener('click', drawNext)
+    document.querySelector('.fm #undo').addEventListener('click', undoPrev)
+}
+window.addEventListener('DOMContentLoaded', setupApp)
+</script>
+</body>
+</html>
