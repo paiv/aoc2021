@@ -59,7 +59,7 @@ function startGame() {
     }
     let showVents = document.getElementById('show').checked
     let input = document.getElementById('input').value
-    data = input.trim().split('\n').map(s => [...s.split('->').map(s =>
+    let data = input.trim().split('\n').map(s => [...s.split('->').map(s =>
         s.split(',').map(x => parseInt(x)))])
     let minx = data.reduce((a,ps) => Math.min(a, Math.min(ps[0][0], ps[1][0])), Number.POSITIVE_INFINITY)
     let maxx = data.reduce((a,ps) => Math.max(a, Math.max(ps[0][0], ps[1][0])), Number.NEGATIVE_INFINITY)
