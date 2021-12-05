@@ -7,14 +7,15 @@
 
 <style media="screen">
 :root {--bg:#fff; --fg:#000; --lb:#b8b8b8;}
-@media (prefers-color-scheme:dark) {:root {--bg:#202124;--fg:#f1f3f4;}}
+@media (prefers-color-scheme:dark) {:root {--bg:#202124; --fg:#f1f3f4; --lb:#5F626B}}
 body, body * {background:var(--bg); color:var(--fg);}
 textarea {margin-top:1em; width:12em; height:40em; white-space:pre; font-family:monospace;}
 #gfx {display:flex; flex-grow:1; user-select:none;}
-#gfx canvas {flex-grow:1; margin:0 1em 0 2em; image-rendering:pixelated; border:1px #eee solid;}
+#gfx canvas {flex-grow:1; margin:0 1em 0 2em; image-rendering:pixelated; border:1px var(--lb) solid;}
 .flx {display:flex;}
 .fm {display:flex; flex-direction:column;}
-.fm button {margin-left: 1em; margin-top: 2em;}
+.fm button, .fm input {margin-left: 1em; margin-top: 2em;}
+.fm label {white-space: nowrap;}
 </style>
 
 </head>
@@ -41,6 +42,7 @@ textarea {margin-top:1em; width:12em; height:40em; white-space:pre; font-family:
 
 <div class="fm">
     <button type="button" id="draw">Draw</button>
+    <label for="show"><input type="checkbox" id="show" checked/>vents</label>
 </div>
 
 <div id="gfx">
@@ -55,6 +57,7 @@ function startGame() {
     while (board.firstChild) {
         board.removeChild(board.lastChild)
     }
+    let showVents = document.getElementById('show').checked
     let input = document.getElementById('input').value
     data = input.trim().split('\n').map(s => [...s.split('->').map(s =>
         s.split(',').map(x => parseInt(x)))])
@@ -88,13 +91,25 @@ function startGame() {
     ctx.fillRect(0, 0, w, h)
     let img = ctx.getImageData(0, 0, w, h)
     let px = img.data
-    for (let [y, xs] of vents) {
-        for (let x of xs) {
-            let i = (y * w + x) * 4
-            let q = pois.get(y).has(x)
-            px[i+0] = 255
-            px[i+1] = q ? 0 : 255
-            px[i+2] = q ? 0 : 255
+    if (showVents) {
+        for (let [y, xs] of vents) {
+            for (let x of xs) {
+                let i = (y * w + x) * 4
+                let q = pois.get(y).has(x)
+                px[i+0] = 255
+                px[i+1] = q ? 0 : 255
+                px[i+2] = q ? 0 : 255
+            }
+        }
+    }
+    else {
+        for (let [y, xs] of pois) {
+            for (let x of xs) {
+                let i = (y * w + x) * 4
+                px[i+0] = 255
+                px[i+1] = 0
+                px[i+2] = 0
+            }
         }
     }
     ctx.putImageData(img, 0, 0)
