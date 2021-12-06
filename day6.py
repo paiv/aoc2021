@@ -1,0 +1,36 @@
+#!/usr/bin/env python
+
+def part1(data, N=80):
+    xs = list(map(int, data.split(',')))
+    for _ in range(N):
+        n = xs.count(0)
+        for i,x in enumerate(xs):
+            xs[i] = x - 1 if x > 0 else 6
+        xs.extend([8] * n)
+    return len(xs)
+
+
+def part2(data, N=256):
+    data = list(map(int, data.split(',')))
+    ps = [0] * 10
+    for x in data:
+        ps[x] += 1
+    for _ in range(N):
+        t = ps[0]
+        for i in range(8):
+            ps[i] = ps[i+1]
+        ps[8] = t
+        ps[6] += t
+    return sum(ps)
+
+
+data = '''
+3,4,3,1,2
+'''.strip()
+assert part1(data) == 5934
+assert part2(data) == 26984457539
+
+
+data = open('day6.in').read()
+print(part1(data))
+print(part2(data))
