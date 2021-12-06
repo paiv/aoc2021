@@ -34,3 +34,20 @@ assert part2(data) == 26984457539
 data = open('day6.in').read()
 print(part1(data))
 print(part2(data))
+
+
+def analysis(data):
+    Ns = list(range(0, 51, 1))
+    print('N =', ' '.join(map(str, Ns)))
+    for q in list(range(6)) + [8]:
+        print([q], end=' ')
+        for N in Ns:
+            xs = list(map(int, data.split(',')))
+            xs = [q]
+            for _ in range(N):
+                n = xs.count(0)
+                for i,x in enumerate(xs):
+                    xs[i] = x - 1 if x > 0 else 6
+                xs.extend([8] * n)
+            print(len(xs), end=' ')
+        print()
