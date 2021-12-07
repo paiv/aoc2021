@@ -1,8 +1,14 @@
 #!/usr/bin/env julia
 
-@views function part1(data)
+function part1(data)
     xs = parse.(Int, split(data))
     sum(y > x for (x,y) in zip(xs, xs[2:end]))
+end
+
+
+function part1(data)
+    xs = parse.(Int, split(data))
+    sum(diff(xs) .> 0)
 end
 
 
