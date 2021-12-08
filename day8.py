@@ -109,6 +109,36 @@ def part2(data):
     return ans
 
 
+def part2(data):
+    data = data.strip().splitlines()
+    ans = 0
+    for line in data:
+        si,so = map(str.split, line.split('|'))
+        xs = sorted(map(frozenset, si), key=len)
+        x1, x4, x7, x8 = xs[0], xs[2], xs[1], xs[9]
+        fives, sixes = set(xs[3:6]), set(xs[6:9])
+        for s in fives:
+            if x1.issubset(s):
+                x3 = s; fives.remove(s); break
+        for s in sixes:
+            if x3.issubset(s):
+                x9 = s
+            if not x1.issubset(s):
+                x6 = s
+        x0 = (sixes - {x6, x9}).pop()
+        for s in fives:
+            if s.issubset(x6):
+                x5 = s
+            else:
+                x2 = s
+        nums = {k:i for i,k in enumerate([x0, x1, x2, x3, x4, x5, x6, x7, x8, x9])}
+        r = 0
+        for s in map(frozenset, so):
+            r = r * 10 + nums[s]
+        ans += r
+    return ans
+
+
 data = '''
 be cfbegad cbdgef fgaecd cgeb fdcge agebfd fecdb fabcd edb | fdgacbe cefdb cefbgd gcbe
 edbfga begcd cbg gc gcadebf fbgde acbgfd abcde gfcbed gfec | fcgedb cgb dgebacf gc
