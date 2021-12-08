@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 import itertools
-from collections import defaultdict
 
 
 def part1(data):
@@ -42,6 +41,69 @@ def part2(data):
                 g = (next(i for i,n in enumerate(nums) if set(s) == n) for s in so)
                 for x in g:
                     r = r * 10 + x
+                ans += r
+                break
+    return ans
+
+
+def display7(n1, n2, segments, theme='·#'):
+    wires = [
+        [(0,1), (0,2), (0,3), (0,4)],
+        [(1,0), (2,0)],
+        [(1,5), (2,5)],
+        [(3,1), (3,2), (3,3), (3,4)],
+        [(4,0), (5,0)],
+        [(4,5), (5,5)],
+        [(6,1), (6,2), (6,3), (6,4)],
+    ]
+    tr = {c:x for x,c in enumerate(segments)}
+    U,V = theme[0], theme[1]
+    def s7(n):
+        m = [[U for _ in range(6)] for _ in range(7)]
+        for c in n:
+            for y,x in wires[tr[c]]:
+                m[y][x] = c if U == V else V
+        return [''.join(s) for s in m]
+    xs = [s7(s) for s in n1 + [''] + n2]
+    so = '\n'.join(' '.join(p) for p in zip(*xs))
+    return so + '\n'
+
+
+def part2(data):
+    data = data.strip().splitlines()
+    ans = 0
+    for line in data:
+        si,so = map(str.split, line.split('|'))
+        xs = list(map(frozenset, si))
+        x1 = next(x for x in xs if len(x) == 2)
+        x4 = next(x for x in xs if len(x) == 4)
+        x7 = next(x for x in xs if len(x) == 3)
+        x8 = next(x for x in xs if len(x) == 7)
+        xa = list(x7 - x1)
+        xcf = list(x7 & x1)
+        xbd = list(x4 - x1)
+        xeg = list(x8 - x7 - x4)
+
+        for x,y,z in itertools.product([0,1], repeat=3):
+            a,c,f,b,d,e,g = xa[0], xcf[x], xcf[1-x], xbd[y], xbd[1-y], xeg[z], xeg[1-z]
+            nums = {
+                frozenset({a,b,c,e,f,g}):0,
+                frozenset({c,f}):1,
+                frozenset({a,c,d,e,g}):2,
+                frozenset({a,c,d,f,g}):3,
+                frozenset({b,c,d,f}):4,
+                frozenset({a,b,d,f,g}):5,
+                frozenset({a,b,d,e,f,g}):6,
+                frozenset({a,c,f}):7,
+                frozenset({a,b,c,d,e,f,g}):8,
+                frozenset({a,b,c,d,f,g}):9,
+            }
+            # seg = (a,b,c,d,e,f,g)
+            # print(display7(si, so, seg))
+            if all(x in nums for x in xs):
+                r = 0
+                for s in map(frozenset, so):
+                    r = r * 10 + nums[s]
                 ans += r
                 break
     return ans
