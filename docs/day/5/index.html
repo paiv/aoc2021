@@ -9,6 +9,7 @@
 :root {--bg:#fff; --fg:#000; --lb:#b8b8b8;}
 @media (prefers-color-scheme:dark) {:root {--bg:#202124; --fg:#f1f3f4; --lb:#5F626B}}
 body, body * {background:var(--bg); color:var(--fg);}
+noscript {position:absolute; top:0; left:25%; background-color:magenta; color:white; padding:1em;}
 textarea {margin-top:1em; width:12em; height:40em; white-space:pre; font-family:monospace;}
 #gfx {display:flex; flex-grow:1; user-select:none;}
 #gfx canvas {flex-grow:1; margin:0 1em 0 2em; image-rendering:pixelated; border:1px var(--lb) solid;}
@@ -120,5 +121,6 @@ function setupApp() {
 }
 window.addEventListener('DOMContentLoaded', setupApp)
 </script>
+<noscript>no javascript</noscript>
 </body>
 </html>
