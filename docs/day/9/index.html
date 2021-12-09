@@ -159,7 +159,7 @@ function explore(state) {
                     state.ctx.putImageData(img, x, y)
                 }
             }
-            break
+            state.stage += 1
         }
         default: {
             window.clearInterval(Renderer)
