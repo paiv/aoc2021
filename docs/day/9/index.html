@@ -98,10 +98,18 @@ function explore(state) {
         }
         case 2: {
             state.basins = state.mins.map(k => ({fringe:[k], seen:new Set()}))
+            state.delay = Math.floor(FPS * 0.8)
             state.stage += 1
             break
         }
         case 3: {
+            state.delay -= 1
+            if (state.delay <= 0) {
+                state.stage += 1
+            }
+            break
+        }
+        case 4: {
             let done = true
             for (let obj of state.basins) {
                 while (obj.fringe.length) {
@@ -124,11 +132,19 @@ function explore(state) {
                 }
             }
             if (done) {
+                state.delay = Math.floor(FPS * 0.5)
                 state.stage += 1
             }
             break
         }
-        case 4: {
+        case 5: {
+            state.delay -= 1
+            if (state.delay <= 0) {
+                state.stage += 1
+            }
+            break
+        }
+        case 6: {
             state.basins.sort((a,b) => b.seen.size - a.seen.size)
             for (let j = 0; j < 3; ++j) {
                 for (let k of state.basins[j].seen) {
