@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Day 10: Syntax Scoring</title>
+
+<style media="screen">
+:root {--bg:#fff; --fg:#000; --lb:#b8b8b8; --lf:#474747;}
+@media (prefers-color-scheme:dark) {:root {--bg:#202124; --fg:#f1f3f4; --lb:#5F626B; --lf:#ABADAD;}}
+body, body * {background:var(--bg); color:var(--fg);}
+noscript {position:absolute; top:0; left:25%; background-color:magenta; color:white; padding:1em;}
+textarea {margin-top:1em; width:12em; height:40em; word-wrap:inherit; white-space:pre; font-family:monospace;}
+#gfx {display:flex; flex-direction:column; margin:1em 0 0 1em;}
+.flx {display:flex;}
+.fm {display:flex; flex-direction:column;}
+.fm button {margin-left: 1em; margin-top: 2em;}
+.pm {font-family:monospace;}
+.e0 {font-size:larger; color:var(--lf);}
+.e1 {font-size:larger; font-weight:bolder;}
+.e2 {font-size:larger; color:red; font-weight:bolder;}
+.ea {margin-left:1em;}
+.ee {margin-left:1em;}
+</style>
+
+</head>
+<body>
+
+<a href="../..">paiv</a> ::
+<a href="https://adventofcode.com/2021/day/10">aoc:day/10</a>
+
+<div class="flx">
+
+<div>
+    <textarea id="input"
+>[({(&lt;(())[]&gt;[[{[]{&lt;()&lt;&gt;&gt;
+[(()[&lt;&gt;])]({[&lt;{&lt;&lt;[]&gt;&gt;(
+{([(&lt;{}[&lt;&gt;[]}&gt;{[]{[(&lt;()&gt;
+(((({&lt;&gt;}&lt;{&lt;{&lt;&gt;}{[]{[]{}
+[[&lt;[([]))&lt;([[{}[[()]]]
+[{[{({}]{}}([{[{{{}}([]
+{&lt;[[]]&gt;}&lt;{[{[{[]{()[[[]
+[&lt;(&lt;(&lt;(&lt;{}))&gt;&lt;([]([]()
+&lt;{([([[(&lt;&gt;()){}]&gt;(&lt;&lt;{{
+&lt;{([{{}}[&lt;[[[&lt;&gt;{}]]]&gt;[]]
+</textarea>
+</div>
+
+<div class="fm">
+    <button type="button" id="play">Parse</button>
+</div>
+
+<div id="gfx">
+</div>
+
+</div>
+
+<script type="text/javascript">
+let Renderer = undefined
+const FPS = 10
+const pair = {'<':'>', '{':'}', '[':']', '(':')'}
+const rpair = {'>':'<', '}':'{', ']':'[', ')':'('}
+const SyntaxScoring = {')':3, ']':57, '}':1197, '>':25137}
+const AutocompleteScoring = {'(':1, '[':2, '{':3, '<':4}
+function explore(state) {
+    switch (state.stage) {
+        case 0: {
+            state.runs.forEach(p => {
+                p.disp = ''
+                p.pos = 0
+                p.done = false
+                p.syntaxScore = 0
+                p.autocompleteScore = 0
+                p.stack = []
+            })
+            state.stage += 1
+        }
+        case 1: {
+            let done = true
+            for (let p of state.runs) {
+                if (p.done) { continue }
+                done = false
+                if (p.stack.length >= 2) {
+                    let a = p.stack[p.stack.length-1]
+                    let b = p.stack[p.stack.length-2]
+                    let q = rpair[a]
+                    if (q && q !== b) {
+                        p.err = p.done = true
+                        p.syntaxScore = SyntaxScoring[a]
+                        continue
+                    }
+                    else if (q) {
+                        p.stack.pop()
+                        p.stack.pop()
+                        p.disp = p.stack.join('')
+                        continue
+                    }
+                }
+                if (p.pos >= p.line.length) {
+                    p.done = true
+                    p.autocompleteScore = p.stack.reduce((a, s, i) => a + Math.pow(5,i) * AutocompleteScoring[s], 0)
+                    p.line += p.stack.map(s => pair[s]).reverse().join('')
+                }
+                else {
+                    p.stack.push(p.line[p.pos])
+                    p.pos += 1
+                    p.disp = p.stack.join('')
+                }
+            }
+            if (done) {
+                state.stage += 1
+            }
+            break
+        }
+        default: {
+            window.clearInterval(Renderer)
+            Renderer = undefined
+        }
+    }
+    const spa = (p, s, c) => {
+        let t = document.createElement('span')
+        t.classList.add(c)
+        t.textContent = s
+        p.el.appendChild(t)
+    }
+    state.runs.forEach(p => {
+        while (p.el.firstChild) {
+            p.el.removeChild(p.el.lastChild)
+        }
+        if (p.disp.length) {
+            spa(p, p.disp.substring(0, p.disp.length-1), 'e0')
+            spa(p, p.disp.substring(p.disp.length-1), p.err ? 'e2' : 'e1')
+        }
+        spa(p, p.line.substring(p.pos), 'e0')
+        if (p.syntaxScore) {
+            spa(p, 'syn: ' + p.syntaxScore, 'ee')
+        }
+        if (p.autocompleteScore) {
+            spa(p, 'ac: ' + p.autocompleteScore, 'ea')
+        }
+    })
+}
+function startGame() {
+    if (Renderer) {
+        window.clearInterval(Renderer)
+        Renderer = undefined
+    }
+    document.querySelector('.fm button').blur()
+    const board = document.querySelector('#gfx')
+    while (board.firstChild) {
+        board.removeChild(board.lastChild)
+    }
+    let input = document.getElementById('input').value
+    let data = input.trim().split('\n')
+    let runs = data.map((s,i) => {
+        let el = document.createElement('div')
+        el.id = 'p' + i
+        el.classList.add('pm')
+        board.appendChild(el)
+        return {line:s, el:el}
+    })
+    const state = {
+        stage: 0,
+        runs: runs,
+        fps: (runs.length < 11 ? 2 : FPS),
+    }
+    explore(state)
+    Renderer = window.setInterval(() => explore(state), 1000 / state.fps)
+}
+function setupApp() {
+    document.querySelector('.fm #play').addEventListener('click', startGame)
+}
+window.addEventListener('DOMContentLoaded', setupApp)
+</script>
+<noscript>no javascript</noscript>
+</body>
+</html>

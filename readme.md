@@ -9,5 +9,7 @@ Interactive visualizations
 * [Day 5: Hydrothermal Venture](https://paiv.github.io/aoc2021/day/5/)
 * [Day 8: Seven Segment Search](https://paiv.github.io/aoc2021/day/8/)
 * [Day 9: Smoke Basin](https://paiv.github.io/aoc2021/day/9/)
+* [Day 10: Syntax Scoring](https://paiv.github.io/aoc2021/day/10/)
 
 ![Day 9: Smoke Basin](docs/day/9/smog.gif)
+![Day 10: Syntax Scoring](docs/day/10/syntax.gif)
