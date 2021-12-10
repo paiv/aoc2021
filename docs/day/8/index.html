@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Day 8: Seven Segment Search</title>
+
+<style media="screen">
+:root {--bg:#fff; --fg:#000; --lb:#b8b8b8;}
+@media (prefers-color-scheme:dark) {:root {--bg:#202124;--fg:#f1f3f4;--lb:#5F626B}}
+body, body * {background:var(--bg); color:var(--fg);}
+noscript {position:absolute; top:0; left:25%; background-color:magenta; color:white; padding:1em;}
+textarea {margin-top:1em; height:10em; white-space:pre-wrap; font-family:monospace;}
+#gfx {margin-top:2em;}
+.flx {display:flex; flex-direction:column;}
+.fm {display:flex;}
+.fm button {margin-left:1em; margin-top:2em;}
+.m {font-family:monospace;}
+#ans {white-space:pre-wrap;}
+#disp {font-size:smaller; text-shadow:0 0 0.5em var(--fg),0 0 0.2em #0f0;}
+</style>
+
+</head>
+<body>
+
+<a href="https://adventofcode.com/2021/day/8">aoc:day/8</a>
+
+<div class="flx">
+
+<textarea id="input" spellcheck="false"
+>be cfbegad cbdgef fgaecd cgeb fdcge agebfd fecdb fabcd edb | fdgacbe cefdb cefbgd gcbe
+edbfga begcd cbg gc gcadebf fbgde acbgfd abcde gfcbed gfec | fcgedb cgb dgebacf gc
+fgaebd cg bdaec gdafb agbcfd gdcbef bgcad gfac gcb cdgabef | cg cg fdcagb cbg
+fbegcd cbd adcefb dageb afcb bc aefdc ecdab fgdeca fcdbega | efabcd cedba gadfec cb
+aecbfdg fbg gf bafeg dbefa fcge gcbea fcaegb dgceab fcbdga | gecf egdcabf bgf bfgea
+fgeab ca afcebg bdacfeg cfaedg gcfdb baec bfadeg bafgc acf | gebdcfa ecba ca fadegcb
+dbcfg fgd bdegcaf fgec aegbdf ecdfab fbedc dacgb gdcebf gf | cefg dcbef fcge gbcadfe
+bdfegc cbegaf gecbf dfcage bdacg ed bedf ced adcbefg gebcd | ed bcgafe cdgba cbgef
+egadfb cdbfeg cegd fecab cgb gbdefca cg fgcdab egfdb bfceg | gbdfcae bgc cg cgb
+gcafb gcf dcaebfg ecagb gf abcdeg gaef cafbge fdbac fegbdc | fgae cfgab fg bagce
+</textarea>
+
+<div class="fm">
+    <button type="button" id="play" name="play">Scan</button>
+</div>
+
+<div id="gfx" class="flx m">
+</div>
+
+</div>
+
+<script type="text/javascript">
+let Renderer = undefined
+const FPS = 10
+const wires = [
+    [[0,1], [0,2], [0,3], [0,4]],
+    [[1,0], [2,0]],
+    [[1,5], [2,5]],
+    [[3,1], [3,2], [3,3], [3,4]],
+    [[4,0], [5,0]],
+    [[4,5], [5,5]],
+    [[6,1], [6,2], [6,3], [6,4]],
+]
+function display(prob, theme=' ·#') {
+    const tr = new Map(prob.seg.map((x,i) => [x,i]))
+    function s7(n) {
+        let [u,w,h] = theme
+        let m = [[u,u,u,u,u,u],[u,u,u,u,u,u],[u,u,u,u,u,u],[u,u,u,u,u,u],[u,u,u,u,u,u],[u,u,u,u,u,u],[u,u,u,u,u,u]]
+        for (let [c, q] of tr.entries()) {
+            let t = n.includes(c) ? (w === h ? c : h) : w
+            for (let [y,x] of wires[q]) {
+                m[y][x] = t
+            }
+        }
+        return m.map(a => a.join(''))
+    }
+    let xs = prob[0].concat(['']).concat(prob[1]).map(s => s7(s))
+    let so = xs[0].map((_,i) => xs.map(rs => rs[i]).join(' ')).join('\n')
+    let el = document.querySelector('#disp')
+    el.textContent = so
+}
+function answer(prob) {
+    let [a,b,c,d,e,f,g] = prob.seg
+    nums = {
+        [[a,b,c,e,f,g].sort().join('')]:0,
+        [[c,f].sort().join('')]:1,
+        [[a,c,d,e,g].sort().join('')]:2,
+        [[a,c,d,f,g].sort().join('')]:3,
+        [[b,c,d,f].sort().join('')]:4,
+        [[a,b,d,f,g].sort().join('')]:5,
+        [[a,b,d,e,f,g].sort().join('')]:6,
+        [[a,c,f].sort().join('')]:7,
+        [[a,b,c,d,e,f,g].sort().join('')]:8,
+        [[a,b,c,d,f,g].sort().join('')]:9,
+    }
+    let ans = 0
+    for (let s of prob[1]) {
+        ans = ans * 10 + nums[s]
+    }
+    return ans
+}
+function shuffle(a) {
+    for (let i = a.length; i; ) {
+        let r = Math.floor(Math.random() * i)
+        i -= 1
+        [a[i], a[r]] = [a[r], a[i]]
+    }
+    return a
+}
+function resolve(prob) {
+    let a,b,c,d,e,f,g;
+    let pool = new Set('abcdefg')
+    let tr = new Map()
+    if (prob.x7) {
+        a = prob.x7.split('').filter(x => !prob.x1.includes(x))[0]
+        pool.delete(a)
+    }
+    if (prob.x3) {
+        g = prob.x3.split('').filter(x => x !== a && !prob.x4.includes(x))[0]
+        pool.delete(g)
+        d = prob.x3.split('').filter(x => x !== g && !prob.x7.includes(x))[0]
+        pool.delete(d)
+    }
+    if (prob.x6) {
+        c = prob.x1.split('').filter(x => !prob.x6.includes(x))[0]
+        pool.delete(c)
+        f = prob.x1.split('').filter(x => x !== c)[0]
+        pool.delete(f)
+    }
+    if (prob.x6) {
+        e = prob.x6.split('').filter(x => x !== a && x !== g && !prob.x4.includes(x))[0]
+        pool.delete(e)
+        let xs = new Set([a, d, e, f, g])
+        b = prob.x6.split('').filter(x => !xs.has(x))[0]
+        pool.delete(b)
+    }
+    let xs = shuffle([...pool])
+    let seg = [a,b,c,d,e,f,g].map(x => x === undefined ? xs.pop() : x)
+    return seg
+}
+function brute(prob, lines, res) {
+    switch (prob.stage) {
+        case 0: {
+            for (let s of prob[0]) {
+                if (s.length == 2) { prob.x1 = s; break }
+            }
+            break
+        }
+        case 1: {
+            for (let s of prob[0]) {
+                if (s.length == 3) { prob.x7 = s; break }
+            }
+            break
+        }
+        case 2: {
+            for (let s of prob[0]) {
+                if (s.length == 4) { prob.x4 = s }
+                if (s.length == 5 && prob.x1.split('').every(x => s.includes(x))) {
+                    prob.x3 = s
+                }
+            }
+            break
+        }
+        case 3: {
+            for (let s of prob[0]) {
+                if (s.length == 6 && !prob.x1.split('').every(x => s.includes(x))) {
+                    prob.x6 = s; break
+                }
+            }
+            break
+        }
+        case 4: {
+            prob.ans = answer(prob)
+            res.push(prob.ans || 0)
+            let el = document.querySelector('#ans')
+            el.textContent = res.join(', ')
+            Renderer = window.setTimeout(() => solve(lines, res), 1000 / FPS)
+            return
+        }
+    }
+    prob.seg = resolve(prob)
+    display(prob)
+    prob.stage += 1
+    Renderer = window.setTimeout(() => brute(prob, lines, res), 1000 / FPS)
+}
+function solve(lines, res) {
+    if (Renderer) {
+        window.clearTimeout(Renderer)
+        Renderer = undefined
+    }
+    if (!lines.length) { return }
+    let prob = lines.shift()
+    prob.gid = 'gid' + lines.length
+    prob.stage = 0
+    prob.seg = 'abcdefg'.split('')
+    brute(prob, lines, res)
+}
+function startGame() {
+    document.querySelector('.fm button').blur()
+    const board = document.querySelector('#gfx')
+    while (board.firstChild) {
+        board.removeChild(board.lastChild)
+    }
+    const disp = document.createElement('pre')
+    disp.id = 'disp'
+    board.appendChild(disp)
+    const ans = document.createElement('pre')
+    ans.id = 'ans'
+    board.appendChild(ans)
+    let input = document.getElementById('input').value
+    let lines = input.trim().match(/^[^|]+\|[^|]+$/gm).map(s => s.split('|')
+        .map(p => p.trim().split(' ').map(s => s.split('').sort().join(''))))
+    solve(lines, [])
+}
+function setupApp() {
+    document.querySelector('.fm #play').addEventListener('click', startGame)
+}
+window.addEventListener('DOMContentLoaded', setupApp)
+</script>
+<noscript>no javascript</noscript>
+</body>
+</html>
