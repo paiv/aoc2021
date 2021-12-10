@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Day 9: Smoke Basin</title>
+
+<style media="screen">
+:root {--bg:#fff; --fg:#000; --lb:#b8b8b8;}
+@media (prefers-color-scheme:dark) {:root {--bg:#202124; --fg:#f1f3f4; --lb:#5F626B}}
+body, body * {background:var(--bg); color:var(--fg);}
+noscript {position:absolute; top:0; left:25%; background-color:magenta; color:white; padding:1em;}
+textarea {margin-top:1em; width:12em; height:40em; white-space:pre; font-family:monospace;}
+#gfx {display:flex; flex-grow:1; user-select:none;}
+#gfx canvas {flex-grow:1; margin:0 1em 0 2em; image-rendering:pixelated; border:1px var(--lb) solid;}
+.flx {display:flex;}
+.fm {display:flex; flex-direction:column;}
+.fm button, .fm input {margin-left: 1em; margin-top: 2em;}
+.fm label {white-space: nowrap;}
+</style>
+
+</head>
+<body>
+
+<a href="../..">paiv</a> ::
+<a href="https://adventofcode.com/2021/day/9">aoc:day/9</a>
+
+<div class="flx">
+
+<div>
+    <textarea id="input"
+>2199943210
+3987894921
+9856789892
+8767896789
+9899965678
+</textarea>
+</div>
+
+<div class="fm">
+    <button type="button" id="play">Play</button>
+</div>
+
+<div id="gfx">
+</div>
+
+</div>
+
+<script type="text/javascript">
+let Renderer = undefined
+const FPS = 60
+const ScanSpeed = 20
+const palette = [46, 69, 92, 115, 138, 161, 184, 207, 229, 0]
+const cc = (y,x) => y * 10000 + x
+const yx = cc => [Math.floor(cc / 10000), cc % 10000]
+const neib = [cc(-1,0), cc(1,0), cc(0,-1), cc(0,1)]
+const [inf, ninf] = [Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]
+function explore(state) {
+    switch (state.stage) {
+        case 0: {
+            let it = state.it = state.grid.entries()
+            state.pv = it.next()
+            state.xs = [state.pv.value]
+            state.mins = []
+            state.stage += 1
+        }
+        case 1: {
+            for (const [k,q] of state.xs) {
+                const [y,x] = yx(k)
+                let c = 0
+                if (neib.every(s => (state.grid.has(k+s) ? state.grid.get(k+s) : inf) > q)) {
+                    state.mins.push(k)
+                    c = palette[q]
+                }
+                let img = state.ctx.getImageData(x, y, 1, 1)
+                let px = img.data
+                px[0] = px[1] = px[2] = c
+                state.ctx.putImageData(img, x, y)
+            }
+            if (state.pv.done) {
+                state.stage += 1
+                break
+            }
+            state.xs = []
+            for (let t = 0; t < state.scanSpeed && !state.pv.done; ++t) {
+                state.pv = state.it.next()
+                if (!state.pv.done) {
+                    state.xs.push(state.pv.value)
+                }
+            }
+            if (state.xs.length) {
+                const [k,q] = state.xs[state.xs.length-1]
+                const [y,x] = yx(k)
+                let img = state.ctx.getImageData(x, y, 1, 1)
+                let px = img.data
+                px[0] = px[1] = px[2] = 255
+                state.ctx.putImageData(img, x, y)
+            }
+            break
+        }
+        case 2: {
+            state.basins = state.mins.map(k => ({fringe:[k], seen:new Set()}))
+            state.delay = Math.floor(FPS * 0.8)
+            state.stage += 1
+            break
+        }
+        case 3: {
+            state.delay -= 1
+            if (state.delay <= 0) {
+                state.stage += 1
+            }
+            break
+        }
+        case 4: {
+            let done = true
+            for (let obj of state.basins) {
+                while (obj.fringe.length) {
+                    let k = obj.fringe.shift()
+                    let q = state.grid.get(k)
+                    if (q === 9 || obj.seen.has(k)) { continue }
+                    obj.seen.add(k)
+                    for (let s of neib) {
+                        if (state.grid.has(k + s)) {
+                            obj.fringe.push(k + s)
+                        }
+                    }
+                    const [y,x] = yx(k)
+                    let img = state.ctx.getImageData(x, y, 1, 1)
+                    let px = img.data
+                    px[0] = px[1] = px[2] = palette[q]
+                    state.ctx.putImageData(img, x, y)
+                    done = false
+                    break
+                }
+            }
+            if (done) {
+                state.delay = Math.floor(FPS * 0.5)
+                state.stage += 1
+            }
+            break
+        }
+        case 5: {
+            state.delay -= 1
+            if (state.delay <= 0) {
+                state.stage += 1
+            }
+            break
+        }
+        case 6: {
+            state.basins.sort((a,b) => b.seen.size - a.seen.size)
+            for (let j = 0; j < 3; ++j) {
+                for (let k of state.basins[j].seen) {
+                    let q = state.grid.get(k)
+                    const [y,x] = yx(k)
+                    let img = state.ctx.getImageData(x, y, 1, 1)
+                    let px = img.data
+                    let c = palette[q]
+                    px[0] = px[2] = c
+                    px[1] = c / 2
+                    state.ctx.putImageData(img, x, y)
+                }
+            }
+            state.stage += 1
+        }
+        default: {
+            window.clearInterval(Renderer)
+            Renderer = undefined
+            return
+        }
+    }
+}
+function startGame() {
+    if (Renderer) {
+        window.clearInterval(Renderer)
+        Renderer = undefined
+    }
+    document.querySelector('.fm button').blur()
+    const board = document.querySelector('#gfx')
+    while (board.firstChild) {
+        board.removeChild(board.lastChild)
+    }
+    let input = document.getElementById('input').value
+    let data = input.trim().split('\n')
+    const w = data[0].length
+    const h = data.length
+    let grid = new Map(data.reduce((a,s,y) =>
+        a.concat(s.split('').map((c,x) => [cc(y,x), parseInt(c)])), []))
+    let canvas = document.createElement('canvas')
+    canvas.width = w
+    canvas.height = h
+    let ctx = canvas.getContext('2d')
+    ctx.fillRect(0, 0, w, h)
+    board.appendChild(canvas)
+    const state = {
+        stage: 0,
+        grid: grid,
+        ctx: ctx,
+        boardsize: [w,h],
+        scanSpeed: (w > 10 ? ScanSpeed : 1),
+    }
+    Renderer = window.setInterval(() => explore(state), 1000 / FPS)
+}
+function setupApp() {
+    document.querySelector('.fm #play').addEventListener('click', startGame)
+}
+window.addEventListener('DOMContentLoaded', setupApp)
+</script>
+<noscript>no javascript</noscript>
+</body>
+</html>
