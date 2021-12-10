@@ -24,7 +24,7 @@ def prep(day=None, year=None):
         day = int(day)
 
     mydir = Path(__file__).resolve().parent
-    dayin = mydir / f'day{day}.in'
+    dayin = mydir / 'days' / f'day{day}.in'
     dayurl = f'https://adventofcode.com/{year}/day/{day}/input'
 
     config = configparser.ConfigParser()
