@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import itertools
+from collections import Counter
 
 
 def part1(data):
@@ -135,6 +136,20 @@ def part2(data):
         r = 0
         for s in map(frozenset, so):
             r = r * 10 + nums[s]
+        ans += r
+    return ans
+
+
+def part2(data):
+    abc = 'abcefg cf acdeg acdfg bcdf abdfg abdefg acf abcdefg abcdfg'
+    cs = Counter(x for s in abc.split() for x in s)
+    tr = {sum(cs[c] for c in s):i for i,s in enumerate(abc.split())}
+    data = data.strip().splitlines()
+    ans = 0
+    for line in data:
+        si,so = map(str.split, line.split('|'))
+        cs = Counter(x for s in si for x in s)
+        r = sum(10**i * tr[sum(cs[x] for x in s)] for i,s in enumerate(reversed(so)))
         ans += r
     return ans
 
