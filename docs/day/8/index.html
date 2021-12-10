@@ -80,6 +80,12 @@ function display(prob, theme=' ·#') {
     let el = document.querySelector('#disp')
     el.textContent = so
 }
+function displayBlanks() {
+    const w = ''
+    let prob = [[w,w,w,w,w,w,w,w,w,w],[w,w,w,w]]
+    prob.seg = 'abcdefg'.split('')
+    display(prob)
+}
 function answer(prob) {
     let [a,b,c,d,e,f,g] = prob.seg
     nums = {
@@ -198,16 +204,9 @@ function solve(lines, res) {
 }
 function startGame() {
     document.querySelector('.fm button').blur()
-    const board = document.querySelector('#gfx')
-    while (board.firstChild) {
-        board.removeChild(board.lastChild)
-    }
-    const disp = document.createElement('pre')
-    disp.id = 'disp'
-    board.appendChild(disp)
-    const ans = document.createElement('pre')
-    ans.id = 'ans'
-    board.appendChild(ans)
+    displayBlanks()
+    let ans = document.querySelector('#ans')
+    ans.textContent = ''
     let input = document.getElementById('input').value
     let lines = input.trim().match(/^[^|]+\|[^|]+$/gm).map(s => s.split('|')
         .map(p => p.trim().split(' ').map(s => s.split('').sort().join(''))))
@@ -215,6 +214,14 @@ function startGame() {
 }
 function setupApp() {
     document.querySelector('.fm #play').addEventListener('click', startGame)
+    const board = document.querySelector('#gfx')
+    const disp = document.createElement('pre')
+    disp.id = 'disp'
+    board.appendChild(disp)
+    const ans = document.createElement('pre')
+    ans.id = 'ans'
+    board.appendChild(ans)
+    displayBlanks()
 }
 window.addEventListener('DOMContentLoaded', setupApp)
 </script>
