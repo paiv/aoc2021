@@ -58,6 +58,7 @@ let FPS = 1
 const cc = (y,x) => y * 10000 + x
 const yx = cc => [Math.floor(cc / 10000), cc % 10000]
 const neib = [cc(0,1), cc(-1,1), cc(-1,0), cc(-1, -1), cc(0,-1), cc(1,-1), cc(1,0), cc(1,1)]
+let State = {}
 function render(state) {
     state.tel.textContent = 'T ' + state.t
     const [w,h] = state.boardsize
@@ -125,15 +126,23 @@ function explore(state) {
             break
         }
         default: {
-            window.clearInterval(Renderer)
-            Renderer = undefined
-            return
+            state.done = true
         }
     }
 }
+let lastFrameTimestamp = 0
+function ticker(ts) {
+    let dt = ts - lastFrameTimestamp
+    if (dt > 1000 / FPS) {
+        lastFrameTimestamp = ts
+        explore(State)
+        if (State.done) { return }
+    }
+    Renderer = requestAnimationFrame(ticker)
+}
 function startGame() {
     if (Renderer) {
-        window.clearInterval(Renderer)
+        cancelAnimationFrame(Renderer)
         Renderer = undefined
     }
     document.querySelector('.fm button').blur()
@@ -154,7 +163,7 @@ function startGame() {
     let ctx = canvas.getContext('2d')
     ctx.fillRect(0, 0, w, h)
     board.appendChild(canvas)
-    const state = {
+    State = {
         stage: 0,
         grid: grid,
         ctx: ctx,
@@ -162,7 +171,7 @@ function startGame() {
         t: 0,
         tel: tel,
     }
-    Renderer = window.setInterval(() => explore(state), 1000 / FPS)
+    Renderer = requestAnimationFrame(ticker)
 }
 function setupApp() {
     document.querySelector('.fm #play').addEventListener('click', startGame)
