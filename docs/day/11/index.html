@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Day 11: Dumbo Octopus</title>
+
+<style media="screen">
+:root {--bg:#fff; --fg:#000; --lb:#b8b8b8;}
+@media (prefers-color-scheme:dark) {:root {--bg:#202124; --fg:#f1f3f4; --lb:#5F626B}}
+body, body * {background:var(--bg); color:var(--fg);}
+noscript {position:absolute; top:0; left:25%; background-color:magenta; color:white; padding:1em;}
+textarea {margin-top:1em; width:8em; height:12em; white-space:pre; font-family:monospace;}
+#gfx {display:flex; flex-grow:1; user-select:none;}
+#gfx canvas {flex:1 0 auto; height:auto; margin:0 1em 0 2em; image-rendering:pixelated; border:1px var(--lb) solid;}
+.flx {display:flex;}
+.fm {display:flex; flex-direction:column;}
+.fm * {display:block; margin-left: 1em; margin-top: 2em;}
+.tm {font-family:monospace;}
+</style>
+
+</head>
+<body>
+
+<a href="../..">paiv</a> ::
+<a href="https://adventofcode.com/2021/day/11">aoc:day/11</a>
+
+<div class="flx">
+
+<div>
+    <textarea id="input"
+>5483143223
+2745854711
+5264556173
+6141336146
+6357385478
+4167524645
+2176841721
+6882881134
+4846848554
+5283751526
+</textarea>
+</div>
+
+<div class="fm">
+    <button type="button" id="play">Play</button>
+    <code id="t"></code>
+</div>
+
+<div id="gfx">
+</div>
+
+</div>
+
+<script type="text/javascript">
+let Renderer = undefined
+let FPS = 1
+const cc = (y,x) => y * 10000 + x
+const yx = cc => [Math.floor(cc / 10000), cc % 10000]
+const neib = [cc(0,1), cc(-1,1), cc(-1,0), cc(-1, -1), cc(0,-1), cc(1,-1), cc(1,0), cc(1,1)]
+function render(state) {
+    state.tel.textContent = 'T ' + state.t
+    const [w,h] = state.boardsize
+    let img = state.ctx.getImageData(0, 0, w, h)
+    let px = img.data
+    for (const [k,v] of state.grid) {
+        const [y,x] = yx(k)
+        let i = (y * w + x) * 4
+        c = (v > 9 && state.flash) ? 240 : Math.min(10, v) * 18
+        px[i+0] = px[i+1] = px[i+2] = c
+    }
+    state.ctx.putImageData(img, 0, 0)
+}
+function explore(state) {
+    switch (state.stage) {
+        case 0: {
+            state.flash = true
+            render(state)
+            state.flash = false
+            state.stage += 1
+            break
+        }
+        case 1: {
+            if (state.flash) {
+                state.flash = false
+                let n = 0
+                for (const [k,v] of state.grid) {
+                    if (v > 9) {
+                        state.grid.set(k, 0)
+                        n += 1
+                    }
+                }
+                if (n === state.grid.size) {
+                    state.stage += 1
+                }
+            }
+            else {
+                state.t += 1
+                let fringe = new Array()
+                let seen = new Set()
+                for (const [k,v] of state.grid) {
+                    state.grid.set(k, Math.min(10, v + 1))
+                    if (v >= 9) {
+                        state.flash = true
+                        fringe.push(k) }
+                }
+                while (fringe.length) {
+                    let k = fringe.pop()
+                    if (seen.has(k)) { continue }
+                    seen.add(k)
+                    state.grid.set(k, state.grid.get(k))
+                    neib.forEach(s => {
+                        let q = k + s
+                        let v = state.grid.get(q)
+                        if (v !== undefined) {
+                            state.grid.set(q, Math.min(10, v + 1))
+                            if (v >= 9) {
+                                state.flash = true
+                                fringe.push(q) }
+                        }
+                    })
+                }
+            }
+            render(state)
+            break
+        }
+        default: {
+            window.clearInterval(Renderer)
+            Renderer = undefined
+            return
+        }
+    }
+}
+function startGame() {
+    if (Renderer) {
+        window.clearInterval(Renderer)
+        Renderer = undefined
+    }
+    document.querySelector('.fm button').blur()
+    const board = document.querySelector('#gfx')
+    while (board.firstChild) {
+        board.removeChild(board.lastChild)
+    }
+    let input = document.getElementById('input').value
+    let data = input.trim().split('\n')
+    const w = data[0].length
+    const h = data.length
+    let grid = new Map(data.reduce((a,s,y) =>
+        a.concat(s.split('').map((c,x) => [cc(y,x), parseInt(c)])), []))
+    let tel = document.querySelector('#t')
+    let canvas = document.createElement('canvas')
+    canvas.width = w
+    canvas.height = h
+    let ctx = canvas.getContext('2d')
+    ctx.fillRect(0, 0, w, h)
+    board.appendChild(canvas)
+    const state = {
+        stage: 0,
+        grid: grid,
+        ctx: ctx,
+        boardsize: [w,h],
+        t: 0,
+        tel: tel,
+    }
+    Renderer = window.setInterval(() => explore(state), 1000 / FPS)
+}
+function setupApp() {
+    document.querySelector('.fm #play').addEventListener('click', startGame)
+}
+window.addEventListener('DOMContentLoaded', setupApp)
+</script>
+<noscript>no javascript</noscript>
+</body>
+</html>
