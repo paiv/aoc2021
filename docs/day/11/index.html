@@ -15,7 +15,7 @@ textarea {margin-top:1em; width:8em; height:12em; white-space:pre; font-family:m
 #gfx canvas {flex:1 0 auto; height:auto; margin:0 1em 0 2em; image-rendering:pixelated; border:1px var(--lb) solid;}
 .flx {display:flex;}
 .fm {display:flex; flex-direction:column;}
-.fm * {display:block; margin-left: 1em; margin-top: 2em;}
+.fm > * {margin-left: 1em; margin-top: 2em;}
 .tm {font-family:monospace;}
 </style>
 
@@ -54,7 +54,7 @@ textarea {margin-top:1em; width:8em; height:12em; white-space:pre; font-family:m
 
 <script type="text/javascript">
 let Renderer = undefined
-let FPS = 1
+let FPS = 3
 const cc = (y,x) => y * 10000 + x
 const yx = cc => [Math.floor(cc / 10000), cc % 10000]
 const neib = [cc(0,1), cc(-1,1), cc(-1,0), cc(-1, -1), cc(0,-1), cc(1,-1), cc(1,0), cc(1,1)]
@@ -67,7 +67,7 @@ function render(state) {
     for (const [k,v] of state.grid) {
         const [y,x] = yx(k)
         let i = (y * w + x) * 4
-        c = (v > 9 && state.flash) ? 240 : Math.min(10, v) * 18
+        c = (v > 9 && state.flash) ? 245 : Math.min(10, v) * 20
         px[i+0] = px[i+1] = px[i+2] = c
     }
     state.ctx.putImageData(img, 0, 0)
@@ -78,6 +78,7 @@ function explore(state) {
             state.flash = true
             render(state)
             state.flash = false
+            state.nextWave = []
             state.stage += 1
             break
         }
@@ -95,16 +96,10 @@ function explore(state) {
                     state.stage += 1
                 }
             }
-            else {
-                state.t += 1
-                let fringe = new Array()
-                let seen = new Set()
-                for (const [k,v] of state.grid) {
-                    state.grid.set(k, Math.min(10, v + 1))
-                    if (v >= 9) {
-                        state.flash = true
-                        fringe.push(k) }
-                }
+            else if (state.nextWave.length) {
+                let fringe = state.nextWave
+                let seen = state.seen
+                let nextWave = new Array()
                 while (fringe.length) {
                     let k = fringe.pop()
                     if (seen.has(k)) { continue }
@@ -116,10 +111,27 @@ function explore(state) {
                         if (v !== undefined) {
                             state.grid.set(q, Math.min(10, v + 1))
                             if (v >= 9) {
-                                state.flash = true
-                                fringe.push(q) }
+                                nextWave.push(q) }
                         }
                     })
+                }
+                state.nextWave = nextWave
+                state.seen = seen
+                if (!nextWave.length) {
+                    state.flash = true
+                }
+            }
+            else {
+                state.t += 1
+                let fringe = new Array()
+                for (const [k,v] of state.grid) {
+                    state.grid.set(k, Math.min(10, v + 1))
+                    if (v >= 9) {
+                        fringe.push(k) }
+                }
+                if (fringe.length) {
+                    state.nextWave = fringe
+                    state.seen = new Set()
                 }
             }
             render(state)
