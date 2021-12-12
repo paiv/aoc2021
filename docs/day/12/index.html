@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Day 12: Passage Pathing</title>
+
+<style media="screen">
+:root {--bg:#fff; --fg:#000; --lb:#b8b8b8;}
+@media (prefers-color-scheme:dark) {:root {--bg:#202124; --fg:#f1f3f4; --lb:#5F626B}}
+body, body * {background:var(--bg); color:var(--fg);}
+noscript {position:absolute; top:0; left:25%; background:magenta; color:white; padding:1em;}
+textarea {margin-top:1em; width:8em; height:32em; white-space:pre; font-family:monospace;}
+#gfx {display:flex; flex-direction:column; flex-grow:1; font-family:monospace;}
+#gfx svg {margin:1rem; user-select:none;}
+.flx {display:flex;}
+.fm {display:flex; flex-direction:column;}
+.fm > * {margin:2rem 0 0 1rem;}
+</style>
+
+</head>
+<body>
+
+<a href="../..">paiv</a> ::
+<a href="https://adventofcode.com/2021/day/12">aoc:day/12</a>
+
+<div class="flx">
+
+<div>
+    <textarea id="input" spellcheck="false"
+>start-A
+start-b
+A-c
+A-b
+b-d
+A-end
+b-end
+</textarea>
+</div>
+
+<div class="fm">
+    <button type="button" id="graph">Graph</button>
+    <button type="button" id="play">Search</button>
+    <label><input type="checkbox" id="part2"/>part 2</label>
+</div>
+
+<div id="gfx">
+</div>
+
+</div>
+
+<script type="text/javascript">
+let Renderer = undefined
+let FPS = 1
+let State = {}
+function render(state) {
+    if (state.hi.length) {
+        do {
+            let el = state.hi.shift()
+            let c = state.hiseen.has(el) ? '#77f' : '#f77'
+            state.hiseen.add(el)
+            state.lasthi.push(el)
+            if (el.tagName === 'line') {
+                el.setAttribute('stroke', c)
+            }
+            else {
+                el.setAttribute('fill', c)
+            }
+        } while (state.hi.length % 2)
+    }
+    else {
+        state.totals.textContent = 'Total paths: ' + state.ans
+        state.hiseen.clear()
+        for (let el of state.lasthi) {
+            if (el.tagName === 'line') {
+                el.setAttribute('stroke', 'var(--fg)')
+            }
+            else {
+                el.setAttribute('fill', 'var(--fg)')
+            }
+        }
+        state.lasthi = []
+    }
+}
+function explore(state) {
+    switch (state.stage) {
+        case 0: {
+            state.ans = 0
+            state.totals.textContent = 'Total paths: 0'
+            state.lasthi = []
+            state.hi = []
+            state.hiseen = new Set()
+            let hi = [state.source.get('start')]
+            state.fringe = [['start', new Set(), false, hi]]
+            state.stage += 1
+            break
+        }
+        case 1: {
+            if (state.hi.length || state.lasthi.length) {
+                render(state)
+            }
+            else if (!state.fringe.length) {
+                state.stage += 1
+            }
+            else {
+                while (state.fringe.length) {
+                    let [s, seen, p, hi] = state.fringe.pop()
+                    if (s === 'end') {
+                        state.ans += 1
+                        state.pathComplete = true
+                        state.hi = hi
+                        render(state)
+                        break
+                    }
+                    if (seen.has(s)) {
+                        if (!state.isPart2 || p) { continue }
+                        p = true
+                    }
+                    if (/^[a-z]+$/.test(s)) { seen.add(s) }
+                    for (let d of state.graph.get(s)) {
+                        let el = state.source.get(d)
+                        let dg = state.source.get(s).graph_edges.get(d)
+                        state.fringe.push([d, new Set(seen), p, hi.concat([dg,el])])
+                    }
+                }
+            }
+            break
+        }
+        default: {
+            state.done = true
+        }
+    }
+}
+let lastFrameTimestamp = 0
+function ticker(ts) {
+    if (!lastFrameTimestamp) {
+        lastFrameTimestamp = ts
+    }
+    else {
+        let dt = ts - lastFrameTimestamp
+        let w = 1000 / FPS
+        while (dt > w) {
+            dt -= w
+            lastFrameTimestamp = ts
+            explore(State)
+            if (State.done) { return }
+        }
+    }
+    if (Renderer) {
+        Renderer = requestAnimationFrame(ticker)
+    }
+}
+function loadGraph() {
+    if (Renderer) {
+        cancelAnimationFrame(Renderer)
+        Renderer = undefined
+    }
+    document.querySelector('.fm button').blur()
+    const board = document.querySelector('#gfx')
+    while (board.firstChild) {
+        board.removeChild(board.lastChild)
+    }
+    let isPart2 = document.getElementById('part2').checked
+    let input = document.getElementById('input').value
+    let graph = new Map()
+    for (let line of input.trim().split(/\s+/)) {
+        let [s,d] = line.split('-')
+        for (let [a,b] of [[s,d], [d,s]]) {
+            if (b !== 'start') {
+                let s = graph.get(a) || new Set()
+                s.add(b)
+                graph.set(a, s)
+            }
+        }
+    }
+    const ns = 'http://www.w3.org/2000/svg'
+    let canvas = document.createElementNS(ns, 'svg')
+    let canvasWidth = 0
+    let canvasHeight = 0
+    board.appendChild(canvas)
+    let sample = document.createElementNS(ns, 'text')
+    sample.textContent = 'sample'
+    canvas.appendChild(sample)
+    let bbox = sample.getBBox()
+    let hh = bbox.height
+    canvas.removeChild(sample)
+    let wr = graph.size * hh
+    let source = new Map()
+    let i = 0
+    for (let [k, xs] of graph) {
+        let a = Math.PI * 2 * i / graph.size
+        let x = wr + hh + Math.sin(a) * wr
+        let y = wr + hh - Math.cos(a) * wr
+        i += 1
+        let el = document.createElementNS(ns, 'text')
+        el.setAttribute('x', x)
+        el.setAttribute('y', y)
+        el.setAttribute('fill', 'var(--bg)')
+        el.textContent = k
+        x += 0
+        y += hh * 1.5
+        canvas.appendChild(el)
+        let box = el.getBBox()
+        box.x -= hh / 2
+        box.width += hh
+        let g = document.createElementNS(ns, 'g')
+        let bel = document.createElementNS(ns, 'rect')
+        bel.setAttribute('x', box.x)
+        bel.setAttribute('y', box.y)
+        bel.setAttribute('width', box.width)
+        bel.setAttribute('height', box.height)
+        bel.setAttribute('rx', hh/3)
+        bel.setAttribute('ry', hh/3)
+        bel.setAttribute('fill', 'var(--fg)')
+        g.appendChild(bel)
+        canvas.replaceChild(g, el)
+        g.appendChild(el)
+        source.set(k, bel)
+        bel.graph_edges = new Map()
+        canvasWidth = Math.max(canvasWidth, box.x + box.width)
+        canvasHeight = Math.max(canvasHeight, box.y + box.height)
+    }
+    canvas.setAttribute('width', canvasWidth)
+    canvas.setAttribute('height', canvasHeight)
+    let off = canvas.getBoundingClientRect()
+    for (let [s, xs] of graph) {
+        let sel = source.get(s)
+        let sbox = sel.getBBox()
+        for (let d of xs) {
+            if (d >= s) { continue }
+            let del = source.get(d)
+            let dbox = del.getBBox()
+            let el = document.createElementNS(ns, 'line')
+            el.setAttribute('stroke', 'var(--fg)')
+            el.setAttribute('stroke-width', hh/5)
+            el.setAttribute('x1', (sbox.x + sbox.width / 2))
+            el.setAttribute('y1', (sbox.y + sbox.height / 2))
+            el.setAttribute('x2', (dbox.x + dbox.width / 2))
+            el.setAttribute('y2', (dbox.y + dbox.height / 2))
+            canvas.insertBefore(el, canvas.firstChild)
+            sel.graph_edges.set(d, el)
+            del.graph_edges.set(s, el)
+        }
+    }
+    let totals = document.createElement('div')
+    board.appendChild(totals)
+    State = {
+        stage: 0,
+        graph: graph,
+        source: source,
+        isPart2: isPart2,
+        totals: totals,
+    }
+}
+function startSearch() {
+    loadGraph()
+    lastFrameTimestamp = 0
+    Renderer = requestAnimationFrame(ticker)
+}
+function setupApp() {
+    document.querySelector('.fm #graph').addEventListener('click', loadGraph)
+    document.querySelector('.fm #play').addEventListener('click', startSearch)
+}
+window.addEventListener('DOMContentLoaded', setupApp)
+</script>
+<noscript>no javascript</noscript>
+</body>
+</html>

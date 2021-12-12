@@ -8,3 +8,4 @@ title: Advent of Code 2021
 * [Day 9: Smoke Basin](day/9/)
 * [Day 10: Syntax Scoring](day/10/)
 * [Day 11: Dumbo Octopus](day/11/)
+* [Day 12: Passage Pathing](day/12/)
