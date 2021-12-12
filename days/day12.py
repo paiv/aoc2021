@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-from collections import defaultdict, deque
+from collections import defaultdict
 
 
 def part1(data):
@@ -8,9 +8,9 @@ def part1(data):
         grid[a].add(b)
         grid[b].add(a)
     ans = 0
-    fringe = deque([('start', set())])
+    fringe = [('start', set())]
     while fringe:
-        s,seen = fringe.popleft()
+        s,seen = fringe.pop()
         if s == 'end':
             ans += 1
             continue
@@ -29,9 +29,9 @@ def part2(data):
         if a != 'start':
             grid[b].add(a)
     ans = 0
-    fringe = deque([('start', set(), False)])
+    fringe = [('start', set(), False)]
     while fringe:
-        s,seen,p = fringe.popleft()
+        s,seen,p = fringe.pop()
         if s == 'end':
             ans += 1
             continue
