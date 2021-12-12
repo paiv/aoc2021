@@ -144,15 +144,22 @@ function explore(state) {
 }
 let lastFrameTimestamp = 0
 function ticker(ts) {
-    let dt = ts - lastFrameTimestamp
-    let w = 1000 / FPS
-    while (dt > w) {
-        dt -= w
+    if (!lastFrameTimestamp) {
         lastFrameTimestamp = ts
-        explore(State)
-        if (State.done) { return }
     }
-    Renderer = requestAnimationFrame(ticker)
+    else {
+        let dt = ts - lastFrameTimestamp
+        let w = 1000 / FPS
+        while (dt > w) {
+            dt -= w
+            lastFrameTimestamp = ts
+            explore(State)
+            if (State.done) { return }
+        }
+    }
+    if (Renderer) {
+        Renderer = requestAnimationFrame(ticker)
+    }
 }
 function startGame() {
     if (Renderer) {
@@ -185,6 +192,7 @@ function startGame() {
         t: 0,
         tel: tel,
     }
+    lastFrameTimestamp = 0
     Renderer = requestAnimationFrame(ticker)
 }
 function setupApp() {
