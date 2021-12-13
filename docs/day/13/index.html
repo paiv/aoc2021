@@ -396,7 +396,7 @@ function startGame() {
         let el = document.createElementNS(ns, 'circle')
         el.setAttribute('cx', grid.ox + x * grid.dx)
         el.setAttribute('cy', grid.oy + y * grid.dy)
-        el.setAttribute('r', hh / 4)
+        el.setAttribute('r', hh / 3.4)
         el.setAttribute('fill', 'var(--fg)')
         canvas.appendChild(el)
         let box = el.getBBox()
