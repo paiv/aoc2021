@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Day 13: Transparent Origami</title>
+
+<style media="screen">
+:root {--bg:#fff; --fg:#000; --lb:#b8b8b8;}
+@media (prefers-color-scheme:dark) {:root {--bg:#202124; --fg:#f1f3f4; --lb:#5F626B}}
+body, body * {background:var(--bg); color:var(--fg);}
+noscript {position:absolute; top:0; left:25%; background:magenta; color:white; padding:1em;}
+textarea {margin-top:1em; width:8em; height:32em; white-space:pre; font-family:monospace;}
+#gfx {display:flex; flex-direction:column; flex-grow:1; font-family:monospace;}
+#gfx svg {margin:1rem; user-select:none;}
+.flx {display:flex;}
+.fm {display:flex; flex-direction:column;}
+.fm > * {margin:2rem 0 0 1rem;}
+</style>
+
+</head>
+<body>
+
+<a href="../..">paiv</a> ::
+<a href="https://adventofcode.com/2021/day/13">aoc:day/13</a>
+
+<div class="flx">
+
+<div>
+    <textarea id="input" spellcheck="false"
+>6,10
+0,14
+9,10
+0,3
+10,4
+4,11
+6,0
+6,12
+4,1
+0,13
+10,12
+3,4
+3,0
+8,4
+1,10
+2,14
+8,10
+9,0
+
+fold along y=7
+fold along x=5
+</textarea>
+</div>
+
+<div class="fm">
+    <button type="button" id="play">Fold</button>
+</div>
+
+<div id="gfx">
+</div>
+
+</div>
+
+<script type="text/javascript">
+let Renderer = undefined
+let FPS = 60
+let State = {}
+function ease(t) {
+    return t < 0.5 ? (4 * t * t * t) : (1 - Math.pow(-2 * t + 2, 3) / 2)
+}
+function animate_fold(state) {
+    const grid = state.grid
+    const [axis, n] = state.op
+    const dt = ease(1 - state.delay / state.tstart)
+    const gdx = grid.dx * grid.zoom
+    const gdy = grid.dy * grid.zoom
+    for (let [y, xs] of state.mdots) {
+        for (let [x, el] of xs) {
+            if (axis === 'x') {
+                let tx = (2 * n - x)
+                let dx = (tx - x)
+                let px = grid.ox + (x + dt * dx) * gdx
+                el.setAttribute('cx', px)
+            }
+            else {
+                let ty = (2 * n - y)
+                let dy = (ty - y)
+                let py = grid.oy + (y + dt * dy) * gdy
+                el.setAttribute('cy', py)
+            }
+        }
+    }
+}
+function animate_blow(state) {
+    const grid = state.grid
+    const dt = ease(1 - state.delay / state.tstart)
+    const gdx = grid.dx * grid.zoom
+    const gdy = grid.dy * grid.zoom
+    for (let [y, xs] of state.dots) {
+        for (let [x, el] of xs) {
+            let px = grid.ox + x * gdx * (1 + dt)
+            let py = grid.oy + y * gdy * (1 + dt)
+            el.setAttribute('cx', px)
+            el.setAttribute('cy', py)
+        }
+    }
+}
+function explore(state) {
+    switch (state.stage) {
+        case 0: {
+            state.delay = Math.floor(FPS / 2)
+            state.stage += 1
+            break
+        }
+        case 1: {
+            state.delay -= 1
+            if (state.delay <= 0) {
+                state.stage += 1
+            }
+            break
+        }
+        case 2: {
+            if (state.ops.length) {
+                state.op = state.ops.shift()
+                const [axis, n] = state.op
+                let ga = new Map()
+                let gb = new Map()
+                for (let [y, xs] of state.dots) {
+                    for (let [x, el] of xs) {
+                        let gt = undefined
+                        if ((axis === 'x' && x < n) || (axis === 'y' && y < n)) {
+                            gt = ga
+                        }
+                        else if ((axis === 'x' && x > n) || (axis === 'y' && y > n)) {
+                            gt = gb
+                        }
+                        if (gt) {
+                            let xs = gt.get(y) || new Map()
+                            xs.set(x, el)
+                            gt.set(y, xs)
+                        }
+                    }
+                }
+                state.dots = ga
+                state.mdots = gb
+                state.tstart = Math.floor(FPS / 3)
+                state.delay = state.tstart
+                state.stage += 1
+            }
+            else {
+                state.stage += 100
+            }
+            break
+        }
+        case 3: {
+            state.delay -= 1
+            animate_fold(state)
+            if (state.delay <= 0) {
+                const [axis, n] = state.op
+                for (let [y, xs] of state.mdots) {
+                    for (let [x, el] of xs) {
+                        let tx = (axis === 'x') ? (2 * n - x) : x
+                        let ty = (axis === 'y') ? (2 * n - y) : y
+                        let zs = state.dots.get(ty) || new Map()
+                        if (zs.get(tx)) {
+                            el.parentNode.removeChild(el)
+                        }
+                        else {
+                            zs.set(tx, el)
+                            state.dots.set(ty, zs)
+                        }
+                    }
+                }
+                state.mdots = new Map()
+                let maxx = 0
+                let maxy = 0
+                for (let [y, xs] of state.dots) {
+                    maxy = Math.max(maxy, y)
+                    for (let [x, el] of xs) {
+                        maxx = Math.max(maxx, x)
+                    }
+                }
+                if ((maxx * state.grid.dx * state.grid.zoom < state.canvas.w * 0.7) && (maxy * state.grid.dy * state.grid.zoom < state.canvas.h * 0.7)) {
+                    state.delay = Math.floor(FPS / 2)
+                    state.stage += 1
+                }
+                else {
+                    state.stage = 0
+                }
+            }
+            break
+        }
+        case 4: {
+            state.delay -= 1
+            if (state.delay <= 0) {
+                state.tstart = Math.floor(FPS / 3)
+                state.delay = state.tstart
+                state.stage += 1
+            }
+            break
+        }
+        case 5: {
+            state.delay -= 1
+            animate_blow(state)
+            if (state.delay <= 0) {
+                state.grid.zoom *= 2
+                state.stage = 0
+            }
+            break
+        }
+        default: {
+            state.done = true
+        }
+    }
+}
+let lastFrameTimestamp = 0
+function ticker(ts) {
+    if (!lastFrameTimestamp) {
+        lastFrameTimestamp = ts
+    }
+    else {
+        let dt = ts - lastFrameTimestamp
+        let w = 1000 / FPS
+        while (dt > w) {
+            dt -= w
+            lastFrameTimestamp = ts
+            explore(State)
+            if (State.done) { return }
+        }
+    }
+    if (Renderer) {
+        Renderer = requestAnimationFrame(ticker)
+    }
+}
+function startGame() {
+    if (Renderer) {
+        cancelAnimationFrame(Renderer)
+        Renderer = undefined
+    }
+    document.querySelector('.fm button').blur()
+    const board = document.querySelector('#gfx')
+    while (board.firstChild) {
+        board.removeChild(board.lastChild)
+    }
+    let input = document.getElementById('input').value
+    let [data, ops] = input.trim().split('\n\n')
+    data = data.trim().split('\n').map(s => s.trim().split(',').map(s => parseInt(s)))
+    const maxx = data.map(p => p[0]).reduce((a,x) => Math.max(a,x))
+    const maxy = data.map(p => p[1]).reduce((a,y) => Math.max(a,y))
+    ops = ops.trim().split('\n').map(s => s.trim().split(' ')[2].split('=')).map(p => [p[0], parseInt(p[1])])
+    const ns = 'http://www.w3.org/2000/svg'
+    let canvas = document.createElementNS(ns, 'svg')
+    let canvasWidth = 0
+    let canvasHeight = 0
+    board.appendChild(canvas)
+    let sample = document.createElementNS(ns, 'text')
+    sample.textContent = 'sample'
+    canvas.appendChild(sample)
+    let bbox = sample.getBBox()
+    const hh = bbox.height
+    const scale = 600 / (Math.max(maxx, maxy) * hh)
+    let grid = {ox:hh, oy:hh, dx:hh*scale, dy:hh*scale, zoom:1}
+    canvas.removeChild(sample)
+    let dots = new Map()
+    let i = 0
+    data.forEach((p, i) => {
+        const [x,y] = p
+        let el = document.createElementNS(ns, 'circle')
+        el.setAttribute('cx', grid.ox + x * grid.dx)
+        el.setAttribute('cy', grid.oy + y * grid.dy)
+        el.setAttribute('r', hh / 4)
+        el.setAttribute('fill', 'var(--fg)')
+        canvas.appendChild(el)
+        let box = el.getBBox()
+        canvasWidth = Math.max(canvasWidth, box.x + box.width)
+        canvasHeight = Math.max(canvasHeight, box.y + box.height)
+        let xs = dots.get(y) || new Map()
+        xs.set(x, el)
+        dots.set(y, xs)
+    })
+    canvas.setAttribute('width', canvasWidth)
+    canvas.setAttribute('height', canvasHeight)
+    State = {
+        stage: 0,
+        dots: dots,
+        ops: ops,
+        grid: grid,
+        canvas: {w:canvasWidth, h:canvasHeight},
+    }
+    lastFrameTimestamp = 0
+    Renderer = requestAnimationFrame(ticker)
+}
+function setupApp() {
+    document.querySelector('.fm #play').addEventListener('click', startGame)
+}
+window.addEventListener('DOMContentLoaded', setupApp)
+</script>
+<noscript>no javascript</noscript>
+</body>
+</html>
