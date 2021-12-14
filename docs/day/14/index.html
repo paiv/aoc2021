@@ -178,6 +178,7 @@ function chartAppend(state, datax, datay) {
 }
 function chartLayout(state) {
     let chart = state.chart
+    chart.log = state.isLogScale
     let {w:cw, h:ch} = state.canvasSize
     let grid = state.grid
     for (let [i, bar] of chart.bars.entries()) {
@@ -309,7 +310,10 @@ function ticker(ts) {
         let dt = ts - lastFrameTimestamp
         lastFrameTimestamp = ts
         explore(State, ts, dt)
-        if (State.done) { return }
+        if (State.done) {
+            Renderer = undefined
+            return
+        }
     }
     if (Renderer) {
         Renderer = requestAnimationFrame(ticker)
@@ -358,8 +362,15 @@ function startGame() {
     lastFrameTimestamp = 0
     Renderer = requestAnimationFrame(ticker)
 }
+function setScale(e) {
+    State.isLogScale = document.getElementById('scale').checked
+    if (!Renderer && State.chart) {
+        chartLayout(State)
+    }
+}
 function setupApp() {
     document.querySelector('.fm #play').addEventListener('click', startGame)
+    document.querySelector('.fm #scale').addEventListener('click', setScale)
 }
 window.addEventListener('DOMContentLoaded', setupApp)
 </script>
