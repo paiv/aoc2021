@@ -191,10 +191,10 @@ fold along y=8
 
 <script type="text/javascript">
 let Renderer = undefined
-let FPS = 60
+let FPS = 120
 let State = {}
 function ease(t) {
-    return t < 0.5 ? (4 * t * t * t) : (1 - Math.pow(-2 * t + 2, 3) / 2)
+    return -(Math.cos(Math.PI * t) - 1) / 2
 }
 function animate_fold(state) {
     const grid = state.grid
@@ -271,7 +271,7 @@ function explore(state) {
                 }
                 state.dots = ga
                 state.mdots = gb
-                state.tstart = Math.floor(FPS / 3)
+                state.tstart = Math.floor(FPS / 1)
                 state.delay = state.tstart
                 state.stage += 1
             }
