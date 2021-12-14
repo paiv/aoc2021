@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Day 14: Extended Polymerization</title>
+
+<style media="screen">
+:root {--bg:#fff; --fg:#000; --lb:#b8b8b8;}
+@media (prefers-color-scheme:dark) {:root {--bg:#202124; --fg:#f1f3f4; --lb:#5F626B}}
+body, body * {background:var(--bg); color:var(--fg);}
+noscript {position:absolute; top:0; left:25%; background:magenta; color:white; padding:1em;}
+textarea {margin-top:1em; width:8em; height:32em; white-space:pre; font-family:monospace;}
+#gfx {display:flex; flex-direction:column; flex-grow:1; margin:1rem; font-family:monospace;}
+.flx {display:flex;}
+.fm {display:flex; flex-direction:column;}
+.fm > * {margin:2rem 0 0 1rem;}
+.fm label {white-space: nowrap;}
+</style>
+
+</head>
+<body>
+
+<a href="../..">paiv</a> ::
+<a href="https://adventofcode.com/2021/day/14">aoc:day/14</a>
+
+<div class="flx">
+
+<div>
+    <textarea id="input" spellcheck="false"
+>NNCB
+
+CH -> B
+HH -> N
+CB -> H
+NH -> C
+HB -> C
+HC -> B
+HN -> C
+NN -> C
+BH -> H
+NC -> B
+NB -> B
+BN -> B
+BB -> N
+BC -> B
+CC -> N
+CN -> C
+</textarea>
+</div>
+
+<div class="fm">
+    <button type="button" id="play">Play</button>
+    <label><input type="checkbox" id="scale"/>scale</label>
+</div>
+
+<div id="gfx">
+</div>
+
+</div>
+
+<script type="text/javascript">
+let Renderer = undefined
+let AnimationSpeed = 1
+let State = {}
+const svgns = 'http://www.w3.org/2000/svg'
+const palette = ['#a6cee3', '#1f78b4', '#b2df8a', '#33a02c', '#fb9a99', '#e31a1c', '#fdbf6f', '#ff7f00', '#cab2d6', '#6a3d9a']
+function ease(t) {
+    return Math.sin((t * Math.PI) / 2)
+}
+function msums(adj, q) {
+    let xs = adj[0].map((_,i) => adj.map(r => r[i]).reduce((a,x) => a+x,0))
+    xs[q] += 1
+    return xs
+}
+function chartReorderLegend(state) {
+    let chart = state.chart
+    let reorder = chart.reorder
+    let pane = chart.legend
+    let {w:cw, h:ch} = state.canvasSize
+    let grid = state.grid
+    let sp = 1.5
+    let oy = reorder.length * grid.dx * sp
+    for (let ix of reorder) {
+        let row = pane.children[ix]
+        let el = row.children[0]
+        let tl = row.children[1]
+        el.setAttribute('y', oy - grid.dx)
+        tl.setAttribute('y', oy - grid.dx * 0.2)
+        oy -= grid.dx * sp
+    }
+}
+function chartSetLegend(state, labels) {
+    let chart = state.chart
+    if (!chart.legend) {
+        let {w:cw, h:ch} = state.canvasSize
+        let grid = state.grid
+        let sp = 1.5
+        let oy = labels.length * grid.dx * sp
+        let bg = document.createElementNS(svgns, 'rect')
+        bg.setAttribute('fill', 'var(--bg)')
+        bg.setAttribute('opacity', 0.75)
+        bg.setAttribute('rx', grid.dx / 4)
+        bg.setAttribute('ry', grid.dx / 4)
+        state.canvas.appendChild(bg)
+        chart.legendbg = bg
+        let pane = document.createElementNS(svgns, 'g')
+        state.canvas.appendChild(pane)
+        chart.legend = pane
+        for (let [i, s] of labels.entries()) {
+            let row = document.createElementNS(svgns, 'g')
+            pane.appendChild(row)
+            let el = document.createElementNS(svgns, 'rect')
+            el.setAttribute('width', grid.dx)
+            el.setAttribute('height', grid.dx)
+            el.setAttribute('x', 0)
+            el.setAttribute('y', oy - grid.dx)
+            el.setAttribute('fill', palette[i % palette.length])
+            row.appendChild(el)
+            let tl = document.createElementNS(svgns, 'text')
+            tl.setAttribute('x', grid.dx * sp)
+            tl.setAttribute('y', oy - grid.dx * 0.2)
+            tl.setAttribute('fill', 'var(--fg)')
+            row.appendChild(tl)
+            oy -= grid.dx * sp
+        }
+    }
+    let maxx = 0
+    let maxy = 0
+    for (let [i, s] of labels.entries()) {
+        let row = chart.legend.children[i]
+        let tl = row.children[1]
+        tl.textContent = s
+        let box = row.getBBox()
+        maxx = Math.max(maxx, box.x + box.width)
+        maxy = Math.max(maxy, box.y + box.height)
+    }
+    chart.legendbg.setAttribute('width', maxx + 5)
+    chart.legendbg.setAttribute('height', maxy + 3)
+}
+function chartAppend(state, datax, datay) {
+    let chart = state.chart
+    chart.reorder = [...datay.entries()].sort((a,b) => a[1] - b[1]).map(p => p[0])
+    if (!chart.canvas) {
+        let group = document.createElementNS(svgns, 'g')
+        state.canvas.insertBefore(group, state.canvas.firstChild)
+        chart.canvas = group
+    }
+    chart.x.push(datax)
+    chart.y.push(datay)
+    let group = document.createElementNS(svgns, 'g')
+    chart.canvas.appendChild(group)
+    let sections = new Array()
+    chart.bars.push(sections)
+    let sumy = 0
+    for (let [i,y] of datay.entries()) {
+        sumy += (y && chart.log) ? Math.log(y) : y
+        let sec = document.createElementNS(svgns, 'rect')
+        sec.setAttribute('fill', palette[i % palette.length])
+        group.appendChild(sec)
+        sections.push(sec)
+    }
+    let {w:cw, h:ch} = state.canvasSize
+    let scaley = sumy > 0 ? ch / sumy : 1
+    let grid = state.grid
+    let bw = Math.max(2, Math.min(grid.dx, cw / chart.x.length))
+    for (let [i, bar] of chart.bars.entries()) {
+        let ox = bw * i
+        for (let ix of chart.reorder) {
+            let el = bar[ix]
+            el.parentNode.appendChild(el)
+            el.setAttribute('x', ox)
+            el.setAttribute('width', bw)
+        }
+    }
+    chartReorderLegend(state)
+    chartLayout(state)
+}
+function chartLayout(state) {
+    let chart = state.chart
+    let {w:cw, h:ch} = state.canvasSize
+    let grid = state.grid
+    for (let [i, bar] of chart.bars.entries()) {
+        let bsum = chart.y[i].reduce((a,x) => a+x, 0)
+        let oy = ch
+        let scale1 = state.sumy > 0 ? 1/state.sumy : 1
+        let scale2 = state.sumy > 0 ? (state.sumy - state.sumy_init) / (state.sumy_target - state.sumy_init) / state.sumy : 0
+        if (chart.log) {
+            if (state.sumy > 1 && bsum >= 1) {
+                scale1 = Math.log(bsum) / Math.log(state.sumy)
+            }
+            scale2 = (state.sumy - state.sumy_init) / (state.sumy_target - state.sumy_init)
+        }
+        let sc = (i === chart.bars.length-1) ? scale2 : scale1
+        for (let ix of chart.reorder) {
+            let el = bar[ix]
+            let y = chart.y[i][ix]
+            let h = ch * y * sc
+            if (chart.log) {
+                h = 0
+                if (bsum > 0) {
+                    h = ch * (y / bsum) * sc
+                }
+            }
+            el.setAttribute('y', oy - h)
+            el.setAttribute('height', h)
+            oy -= h
+        }
+    }
+}
+function explore(state, ts, dt) {
+    switch (state.stage) {
+        case 0: {
+            let model = state.model
+            model.total = model.poly.length
+            let tokens = new Set()
+            for (let [k,v] of model.rules) {
+                for (let x of k + v) {
+                    tokens.add(x)
+                }
+            }
+            model.tokens = new Map([...tokens].map((x,i) => [x,i]))
+            model.startToken = model.tokens.get(model.poly[0])
+            let irules = [...tokens].map(_ => [...tokens].map(_ => 0))
+            for (let [k,v] of model.rules) {
+                let [a, b] = k
+                a = model.tokens.get(a)
+                b = model.tokens.get(b)
+                v = model.tokens.get(v)
+                irules[a][b] = v
+            }
+            let adj = [...tokens].map(_ => [...tokens].map(_ => 0))
+            for (let [i,x] of model.poly.split('').slice(0,model.poly.length-1).entries()) {
+                let a = model.tokens.get(x)
+                let b = model.tokens.get(model.poly[i+1])
+                adj[a][b] += 1
+            }
+            model.adj = adj
+            model.irules = irules
+            model.snip = model.poly
+            state.snipel.textContent = model.snip
+            state.chart = {x:[], y:[], bars:[], log:state.isLogScale}
+            let counts = msums(model.adj, model.startToken)
+            state.sumy = 0
+            state.sumy_init = state.sumy
+            state.sumy_target = counts.reduce((a,x) => a + x, 0)
+            chartSetLegend(state, [...model.tokens].sort((a,b) => a[1] - b[1]).map(p => p[0]))
+            chartAppend(state, 0, counts)
+            state.astart = ts
+            state.delay = ts + 500 / AnimationSpeed
+            state.stage += 1
+            break
+        }
+        case 1: {
+            if (ts >= state.delay) {
+                state.stage += 1
+                state.sumy = state.sumy_target
+            }
+            else {
+                let t = Math.min(1, (ts - state.astart) / (state.delay - state.astart))
+                state.sumy = state.sumy_init + t * (state.sumy_target - state.sumy_init)
+            }
+            chartLayout(state)
+            break
+        }
+        case 2: {
+            let model = state.model
+            model.step += 1
+            if (model.step > model.goal) {
+                state.stage += 1
+            }
+            else {
+                model.snip = model.snip.split('').map((c,i) => [c, model.snip[i+1]||''])
+                    .map(p => p[0] + (model.rules.get(p.join('')) || '')).slice(0, 26).join('')
+                state.snipel.textContent = model.snip + '...'
+                let mz = model.adj.map(r => r.slice())
+                for (let [a, r] of model.irules.entries()) {
+                    for (let [b, s] of r.entries()) {
+                        let n = model.adj[a][b]
+                        mz[a][b] -= n
+                        mz[a][s] += n
+                        mz[s][b] += n
+                    }
+                }
+                model.adj = mz
+                model.total = 1 + model.adj.reduce((a, r) => a + r.reduce((b, x) => b+x, 0), 0)
+                model.counts = msums(model.adj, model.startToken)
+                state.sumy_init = state.sumy
+                state.sumy_target = model.counts.reduce((a,x) => a + x, 0)
+                chartAppend(state, model.step, model.counts.slice())
+                chartSetLegend(state, [...model.tokens].sort((a,b) => a[1] - b[1]).map((p,i) => p[0] + ' ' + model.counts[i]))
+                state.astart = ts
+                state.delay = ts + 1000 / AnimationSpeed
+                state.stage = 1
+            }
+            break
+        }
+        default: {
+            state.done = true
+        }
+    }
+}
+let lastFrameTimestamp = 0
+function ticker(ts) {
+    if (!lastFrameTimestamp) {
+        lastFrameTimestamp = ts
+    }
+    else {
+        let dt = ts - lastFrameTimestamp
+        lastFrameTimestamp = ts
+        explore(State, ts, dt)
+        if (State.done) { return }
+    }
+    if (Renderer) {
+        Renderer = requestAnimationFrame(ticker)
+    }
+}
+function startGame() {
+    if (Renderer) {
+        cancelAnimationFrame(Renderer)
+        Renderer = undefined
+    }
+    document.querySelector('.fm button').blur()
+    let isLogScale = document.getElementById('scale').checked
+    const board = document.querySelector('#gfx')
+    while (board.firstChild) {
+        board.removeChild(board.lastChild)
+    }
+    let input = document.getElementById('input').value
+    let [poly, rules] = input.trim().split('\n\n')
+    rules = new Map(rules.trim().split('\n').map(s => s.trim().split('->').map(s => s.trim())))
+    let snip = document.createElement('div')
+    board.appendChild(snip)
+    let canvas = document.createElementNS(svgns, 'svg')
+    let canvasWidth = 600
+    let canvasHeight = 400
+    const hh = function() {
+        board.appendChild(canvas)
+        let sample = document.createElementNS(svgns, 'text')
+        sample.textContent = 'WqjT'
+        canvas.appendChild(sample)
+        let bbox = sample.getBBox()
+        canvas.removeChild(sample)
+        return bbox.height
+    }()
+    let grid = {dx:hh, dy:hh, zoom:1}
+    canvas.setAttribute('width', canvasWidth)
+    canvas.setAttribute('height', canvasHeight)
+    State = {
+        stage: 0,
+        model: {step:0, goal:40, poly:poly, rules:rules},
+        isLogScale: isLogScale,
+        grid: grid,
+        canvas: canvas,
+        canvasSize: {w:canvasWidth, h:canvasHeight},
+        snipel: snip,
+    }
+    lastFrameTimestamp = 0
+    Renderer = requestAnimationFrame(ticker)
+}
+function setupApp() {
+    document.querySelector('.fm #play').addEventListener('click', startGame)
+}
+window.addEventListener('DOMContentLoaded', setupApp)
+</script>
+<noscript>no javascript</noscript>
+</body>
+</html>

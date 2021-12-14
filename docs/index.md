@@ -10,3 +10,4 @@ title: Advent of Code 2021
 * [Day 11: Dumbo Octopus](day/11/)
 * [Day 12: Passage Pathing](day/12/)
 * [Day 13: Transparent Origami](day/13/)
+* [Day 14: Extended Polymerization](day/14/)
