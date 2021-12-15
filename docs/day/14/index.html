@@ -52,6 +52,7 @@ CN -> C
 <div class="fm">
     <button type="button" id="play">Play</button>
     <label><input type="checkbox" id="scale"/>scale</label>
+    <code id="tstep"></code>
 </div>
 
 <div id="gfx">
@@ -138,7 +139,13 @@ function chartSetLegend(state, labels) {
     chart.legendbg.setAttribute('width', maxx + 5)
     chart.legendbg.setAttribute('height', maxy + 3)
 }
+function chartUpdateLegend(state) {
+    let model = state.model
+    state.tel.textContent = 'T ' + model.step
+    chartSetLegend(state, [...model.tokens].sort((a,b) => a[1] - b[1]).map((p,i) => p[0] + ' ' + model.counts[i]))
+}
 function chartAppend(state, datax, datay) {
+    chartUpdateLegend(state)
     let chart = state.chart
     chart.reorder = [...datay.entries()].sort((a,b) => a[1] - b[1]).map(p => p[0])
     if (!chart.canvas) {
@@ -241,21 +248,22 @@ function explore(state, ts, dt) {
             model.snip = model.poly
             state.snipel.textContent = model.snip
             state.chart = {x:[], y:[], bars:[], log:state.isLogScale}
-            let counts = msums(model.adj, model.startToken)
+            model.counts = msums(model.adj, model.startToken)
             state.sumy = 0
-            state.sumy_init = state.sumy
-            state.sumy_target = counts.reduce((a,x) => a + x, 0)
-            chartSetLegend(state, [...model.tokens].sort((a,b) => a[1] - b[1]).map(p => p[0]))
-            chartAppend(state, 0, counts)
+            state.sumy_init = 1
+            state.sumy_target = model.counts.reduce((a,x) => a + x, 0)
+            chartAppend(state, 0, model.counts)
             state.astart = ts
             state.delay = ts + 500 / AnimationSpeed
             state.stage += 1
             break
         }
         case 1: {
+            let model = state.model
             if (ts >= state.delay) {
                 state.stage += 1
                 state.sumy = state.sumy_target
+                model.step += 1
             }
             else {
                 let t = Math.min(1, (ts - state.astart) / (state.delay - state.astart))
@@ -266,7 +274,6 @@ function explore(state, ts, dt) {
         }
         case 2: {
             let model = state.model
-            model.step += 1
             if (model.step > model.goal) {
                 state.stage += 1
             }
@@ -289,7 +296,6 @@ function explore(state, ts, dt) {
                 state.sumy_init = state.sumy
                 state.sumy_target = model.counts.reduce((a,x) => a + x, 0)
                 chartAppend(state, model.step, model.counts.slice())
-                chartSetLegend(state, [...model.tokens].sort((a,b) => a[1] - b[1]).map((p,i) => p[0] + ' ' + model.counts[i]))
                 state.astart = ts
                 state.delay = ts + 1000 / AnimationSpeed
                 state.stage = 1
@@ -326,6 +332,7 @@ function startGame() {
     }
     document.querySelector('.fm button').blur()
     let isLogScale = document.getElementById('scale').checked
+    let tel = document.querySelector('#tstep')
     const board = document.querySelector('#gfx')
     while (board.firstChild) {
         board.removeChild(board.lastChild)
@@ -358,6 +365,7 @@ function startGame() {
         canvas: canvas,
         canvasSize: {w:canvasWidth, h:canvasHeight},
         snipel: snip,
+        tel: tel,
     }
     lastFrameTimestamp = 0
     Renderer = requestAnimationFrame(ticker)
