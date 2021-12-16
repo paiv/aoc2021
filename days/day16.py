@@ -1,64 +1,59 @@
 #!/usr/bin/env python
-from binascii import unhexlify
 from functools import reduce
+from itertools import islice
 
 
 def parse_packet(bits):
-    i = 0
-    while i + 6 < len(bits):
-        ver = int(bits[i:i+3], 2)
-        i += 3
-        pid = int(bits[i:i+3], 2)
-        i += 3
+    def iint(g, w):
+        x = 0
+        for i in islice(g, w):
+            x = (x << 1) | i
+        return x
+
+    while True:
+        ver = iint(bits, 3)
+        pid = iint(bits, 3)
         if pid == 4:
             x = 0
             while True:
-                s,c = bits[i], bits[i+1:i+5]
-                i += 5
-                x = (x << 4) | int(c, 2)
-                if s != '1': break
-            yield (ver, pid, x, i)
+                s = iint(bits, 1)
+                c = iint(bits, 4)
+                x = (x << 4) | c
+                if not s: break
+            yield (ver, pid, x)
         else:
-            t = int(bits[i])
-            i += 1
-            if t == 0:
-                if i + 15 >= len(bits): break
-                plen = int(bits[i:i+15], 2)
-                i += 15
-                pps = list(parse_packet(bits[i:i+plen]))
-                i += plen
-                yield (ver, pid, pps, i)
+            if iint(bits, 1):
+                nsub = iint(bits, 11)
+                ps = list(islice(parse_packet(bits), nsub))
+                yield (ver, pid, ps)
             else:
-                nsub = int(bits[i:i+11], 2)
-                i += 11
-                pps = list()
-                for _ in range(nsub):
-                    sv, sp, ss, j = next(parse_packet(bits[i:]))
-                    pps.append((sv, sp, ss, i + j))
-                    i += j
-                yield (ver, pid, pps, i)
+                plen = iint(bits, 15)
+                if not plen: break
+                ps = list(parse_packet(islice(bits, plen)))
+                yield (ver, pid, ps)
+
+
+def bitstream(hx):
+    return ((v>>i)&1 for s in hx.strip()
+        for v in[int(s,16)] for i in range(3,-1,-1))
 
 
 def part1(data):
-    bits = ''.join(f'{x:08b}' for x in unhexlify(data.strip()))
-
     def inner(ps):
         ans = 0
-        for v,p,pps,_ in ps:
+        for v,p,pps in ps:
             ans += v
             if p != 4:
                 ans += inner(pps)
         return ans
 
-    ans = inner([*parse_packet(bits)])
+    ans = inner([*parse_packet(bitstream(data))])
     return ans
 
 
 def part2(data):
-    bits = ''.join(f'{x:08b}' for x in unhexlify(data.strip()))
-
     def eval(ps):
-        v,p,pps,_ = ps
+        v,p,pps = ps
         if p == 4:
             return pps
         elif p == 0:
@@ -79,7 +74,7 @@ def part2(data):
             a,b = pps
             return 1 if eval(a) == eval(b) else 0
 
-    ans = eval(next(parse_packet(bits)))
+    ans = eval(next(parse_packet(bitstream(data))))
     return ans
 
 
