@@ -38,6 +38,13 @@ def bitstream(hx):
         for v in[int(s,16)] for i in range(3,-1,-1))
 
 
+def dump_packet(text):
+    print(text)
+    print(''.join(map(str, bitstream(text))))
+    p = next(parse_packet(bitstream(text)))
+    print(p)
+
+
 def part1(data):
     def inner(ps):
         ans = 0
