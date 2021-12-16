@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Day 15: Chiton</title>
+
+<style media="screen">
+:root {--bg:#fff; --fg:#000; --lb:#b8b8b8;}
+@media (prefers-color-scheme:dark) {:root {--bg:#202124; --fg:#f1f3f4; --lb:#5F626B}}
+body, body * {background:var(--bg); color:var(--fg);}
+noscript {position:absolute; top:0; left:25%; background-color:magenta; color:white; padding:1em;}
+textarea {margin-top:1em; width:8em; height:12em; white-space:pre; font-family:monospace;}
+#gfx {display:flex; flex-grow:1; user-select:none;}
+#gfx canvas {flex:1 0 auto; height:auto; margin:0 1em 0 2em; image-rendering:pixelated; border:1px var(--lb) solid;}
+.flx {display:flex;}
+.fm {display:flex; flex-direction:column;}
+.fm > * {margin-left: 1em; margin-top: 2em;}
+.tm {font-family:monospace;}
+.fm label {white-space: nowrap;}
+</style>
+
+</head>
+<body>
+
+<a href="../..">paiv</a> ::
+<a href="https://adventofcode.com/2021/day/15">aoc:day/15</a>
+
+<div class="flx">
+
+<div>
+    <textarea id="input"
+>1163751742
+1381373672
+2136511328
+3694931569
+7463417111
+1319128137
+1359912421
+3125421639
+1293138521
+2311944581
+</textarea>
+</div>
+
+<div class="fm">
+    <button type="button" id="play">Search</button>
+    <label title="crude estimate"><input type="checkbox" id="est" />est</label>
+    <code id="ans"></code>
+</div>
+
+<div id="gfx">
+</div>
+
+</div>
+
+<script type="text/javascript">
+const PriorityQueue = function() {
+const top = 0;
+const parent = i => ((i + 1) >>> 1) - 1;
+const left = i => (i << 1) + 1;
+const right = i => (i + 1) << 1;
+class PriorityQueue {
+  constructor(comparator = (a, b) => a > b) {
+    this._heap = [];
+    this._comparator = comparator;
+  }
+  size() {
+    return this._heap.length;
+  }
+  isEmpty() {
+    return this.size() == 0;
+  }
+  peek() {
+    return this._heap[top];
+  }
+  push(...values) {
+    values.forEach(value => {
+      this._heap.push(value);
+      this._siftUp();
+    });
+    return this.size();
+  }
+  pop() {
+    const poppedValue = this.peek();
+    const bottom = this.size() - 1;
+    if (bottom > top) {
+      this._swap(top, bottom);
+    }
+    this._heap.pop();
+    this._siftDown();
+    return poppedValue;
+  }
+  _greater(i, j) {
+    return this._comparator(this._heap[i], this._heap[j]);
+  }
+  _swap(i, j) {
+    [this._heap[i], this._heap[j]] = [this._heap[j], this._heap[i]];
+  }
+  _siftUp() {
+    let node = this.size() - 1;
+    while (node > top && this._greater(node, parent(node))) {
+      this._swap(node, parent(node));
+      node = parent(node);
+    }
+  }
+  _siftDown() {
+    let node = top;
+    while (
+      (left(node) < this.size() && this._greater(left(node), node)) ||
+      (right(node) < this.size() && this._greater(right(node), node))
+    ) {
+      let maxChild = (right(node) < this.size() && this._greater(right(node), left(node))) ? right(node) : left(node);
+      this._swap(node, maxChild);
+      node = maxChild;
+    }
+  }
+}
+return PriorityQueue
+}()
+</script>
+<script type="text/javascript">
+let Renderer = undefined
+let AnimationSpeed = 1
+let State = {}
+function renderAll(state) {
+    const [w,h] = state.gridSize
+    let img = state.ctx.getImageData(0, 0, w, h)
+    let px = img.data
+    for (let [y,row] of state.grid.entries()) {
+        i = y * w * 4
+        for (let [x,v] of row.entries()) {
+            px[i+0] = px[i+1] = px[i+2] = v * 20
+            i += 4
+        }
+    }
+    state.ctx.putImageData(img, 0, 0)
+}
+function renderPath(state, path) {
+    for (let [y,x] of path) {
+        let img = state.ctx.getImageData(x, y, 1, 1)
+        let px = img.data
+        px[0] = px[1] = px[2] = 255
+        state.ctx.putImageData(img, x, y)
+    }
+}
+function clearPath(state, path) {
+    let grid = state.grid
+    for (let [y,x] of path) {
+        let v = grid[y][x]
+        let img = state.ctx.getImageData(x, y, 1, 1)
+        let px = img.data
+        px[0] = px[2] = v * 20
+        px[1] = v * 10
+        state.ctx.putImageData(img, x, y)
+    }
+}
+const neib = [[0,1], [-1,0], [0,-1], [1,0]]
+function explore(state, ts, dt) {
+    switch (state.stage) {
+        case 0: {
+            let [w,h] = state.gridSize
+            state.origGridSize = [w, h]
+            state.bigGridSize = [w*5, h*5]
+            state.ansel.textContent = state.ans
+            renderAll(state)
+            state.anim = {start:ts, end:(ts + 500 / AnimationSpeed)}
+            state.stage += 1
+            break
+        }
+        case 1: {
+            if (ts >= state.anim.end) {
+                let [w,h] = state.gridSize
+                let fringe = new PriorityQueue((a,b) => a[0] < b[0])
+                let seen = state.grid.map(r => r.map(_ => 0))
+                let path = [[0,0]]
+                let avg = state.grid.reduce((a, row) => a+row.reduce((a,x) => a+x, 0), 0) / (w*h)
+                const est = state.isApproximate ? avg : 1
+                const heur = (p) => -est * (p[0] + p[1])
+                fringe.push([heur([0,0]), 0, [0,0], path])
+                state.search = {fringe:fringe, goal:[h-1, w-1], seen:seen, heur:heur,
+                    lastPath:path, isApproximate:state.isApproximate,
+                    ansd:(state.isApproximate ? est/12 : 0)}
+                state.stage += 1
+            }
+            break
+        }
+        case 2: {
+            if (ts >= state.anim.end) {
+                let search = state.search
+                if (search.done || search.fringe.isEmpty()) {
+                    if (state.gridSize[0] !== state.bigGridSize[0]) {
+                        state.stage += 1
+                    }
+                    else {
+                        state.stage += 100
+                    }
+                }
+                else {
+                    const [w,h] = state.gridSize
+                    while (!(search.fringe.isEmpty() || search.done)) {
+                        let [_, n, [y,x], path] = search.fringe.pop()
+                        clearPath(state, search.lastPath)
+                        renderPath(state, path)
+                        search.lastPath = path
+                        if (search.isApproximate) {
+                            state.ans = n - Math.floor(path.length * search.ansd)
+                            state.ansel.textContent = `(${state.ans})`
+                        }
+                        else {
+                            state.ans = n
+                            state.ansel.textContent = state.ans
+                        }
+                        let [gy,gx] = search.goal
+                        if (y === gy && x === gx) {
+                            search.done = true
+                        }
+                        else if (!search.seen[y][x]) {
+                            search.seen[y][x] = 1
+                            for (let [dy, dx] of neib) {
+                                let ty = y + dy
+                                let tx = x + dx
+                                if (ty >= 0 && tx >= 0 && ty < h && tx < w) {
+                                    let v = state.grid[ty][tx]
+                                    let q = [ty, tx]
+                                    search.fringe.push([n+v+search.heur(q), n + v, q, path.concat([q])])
+                                }
+                            }
+                            break
+                        }
+                    }
+                    let t = search.done ? 1000 : (search.fringe.size() > 100 ? 1 : 100)
+                    state.anim = {start:ts, end:(ts + t / AnimationSpeed)}
+                }
+            }
+            break
+        }
+        case 3: {
+            if (ts >= state.anim.end) {
+                let [w,h] = state.gridSize
+                const [gw,gh] = state.bigGridSize
+                if (w < gw) {
+                    const [ow,oh] = state.origGridSize
+                    const inc = (y, x) => {
+                        let v = grid[y % oh][x % ow]
+                        let ny = Math.floor(y / oh)
+                        let nx = Math.floor(x / ow)
+                        return (v - 1 + ny + nx) % 9 + 1
+                    }
+                    let grid = state.grid
+                    for (let it = 0; it < 5 && w < gw; ++it) {
+                        grid.forEach((row,y) => row.push(inc(y,w)))
+                        grid.push(grid[0].map((_,x) => inc(h,x)))
+                        w += 1
+                        h += 1
+                        if (w < 90) { break }
+                    }
+                    state.gridSize = [w, h]
+                    let canvas = state.ctx.canvas
+                    canvas.width = w
+                    canvas.height = h
+                    state.ctx.fillRect(0, 0, w, h)
+                    renderAll(state)
+                    state.anim = {start:ts, end:(ts + 100 / AnimationSpeed)}
+                }
+                else {
+                    state.stage = 1
+                    state.anim = {start:ts, end:(ts + 800 / AnimationSpeed)}
+                }
+            }
+            break
+        }
+        default: {
+            state.done = true
+        }
+    }
+}
+let lastFrameTimestamp = 0
+function ticker(ts) {
+    if (!lastFrameTimestamp) {
+        lastFrameTimestamp = ts
+    }
+    else {
+        let dt = ts - lastFrameTimestamp
+        lastFrameTimestamp = ts
+        explore(State, ts, dt)
+        if (State.done) {
+            Renderer = undefined
+            return
+        }
+    }
+    if (Renderer) {
+        Renderer = requestAnimationFrame(ticker)
+    }
+}
+function startGame() {
+    if (Renderer) {
+        cancelAnimationFrame(Renderer)
+        Renderer = undefined
+    }
+    document.querySelector('.fm button').blur()
+    const board = document.querySelector('#gfx')
+    while (board.firstChild) {
+        board.removeChild(board.lastChild)
+    }
+    let isApproximate = document.getElementById('est').checked
+    let input = document.getElementById('input').value
+    let data = input.trim().split('\n')
+    const w = data[0].length
+    const h = data.length
+    let grid = data.map(s => s.split('').map(c => parseInt(c)))
+    let ansel = document.querySelector('#ans')
+    let canvas = document.createElement('canvas')
+    canvas.width = w
+    canvas.height = h
+    let ctx = canvas.getContext('2d')
+    ctx.fillRect(0, 0, w, h)
+    board.appendChild(canvas)
+    State = {
+        stage: 0,
+        grid: grid,
+        gridSize: [w,h],
+        ctx: ctx,
+        ans: 0,
+        isApproximate: isApproximate,
+        ansel: ansel,
+    }
+    lastFrameTimestamp = 0
+    Renderer = requestAnimationFrame(ticker)
+}
+function setupApp() {
+    document.querySelector('.fm #play').addEventListener('click', startGame)
+}
+window.addEventListener('DOMContentLoaded', setupApp)
+</script>
+<noscript>no javascript</noscript>
+</body>
+</html>
