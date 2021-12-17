@@ -297,11 +297,12 @@ function startGame() {
     let canvasHeight = 400
     const hh = function() {
         let sample = document.createElementNS(svgns, 'text')
-        sample.textContent = 'W'
+        sample.textContent = 'B'
         canvas.appendChild(sample)
+        let nn = sample.getComputedTextLength()
         let bbox = sample.getBBox()
         canvas.removeChild(sample)
-        return {dx:bbox.width, dy:bbox.height}
+        return {dx:nn, dy:bbox.height}
     }()
     let grid = {dx:hh.dx, dy:hh.dy, zoom:1}
     canvas.setAttribute('width', canvasWidth)
