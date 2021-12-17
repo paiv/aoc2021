@@ -12,3 +12,4 @@ https://paiv.github.io/aoc2021/
 [![](docs/day/14/chart.gif)](https://paiv.github.io/aoc2021/day/14/)
 [![](docs/day/13/fold.gif)](https://paiv.github.io/aoc2021/day/13/)
 [![](docs/day/15/search.gif)](https://paiv.github.io/aoc2021/day/15/)
+[![](docs/day/17/probe.gif)](https://paiv.github.io/aoc2021/day/17/)

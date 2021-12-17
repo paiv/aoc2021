@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Day 17: Trick Shot</title>
+
+<style media="screen">
+:root {--bg:#fff; --fg:#000; --lb:#b8b8b8; --lf:#474747;}
+@media (prefers-color-scheme:dark) {:root {--bg:#202124; --fg:#f1f3f4; --lb:#5F626B; --lf:#ABADAD;}}
+body, body * {background:var(--bg); color:var(--fg);}
+noscript {position:absolute; top:0; left:25%; background:magenta; color:white; padding:1em;}
+textarea {margin-top:1em; width:10em; height:4em; font-family:monospace;}
+#gfx {display:flex; flex-direction:column; flex-grow:1; margin:1rem; font-family:monospace;}
+.flx {display:flex;}
+.fm > * {margin:2rem 0 0 1rem;}
+#cp button {display:block; margin-top:1em;}
+#cp input {width:4em;}
+label {white-space: nowrap;}
+</style>
+
+</head>
+<body>
+
+<a href="../..">paiv</a> ::
+<a href="https://adventofcode.com/2021/day/17">aoc:day/17</a>
+
+<div class="flx">
+
+<div class="fm">
+    <textarea id="input" spellcheck="false"
+>target area: x=20..30, y=-10..-5
+</textarea>
+    <div><button type="button" id="play">Play</button>
+        <code id="hits">0 hits</code></div>
+    <div id="cp"></div>
+</div>
+
+<div id="gfx">
+</div>
+
+</div>
+
+<script type="text/javascript">
+let Symbols = {probe:'#', start:'S', sea:'.', trench:'T'}
+let Colors = {probe:'#ff7f00', grid:'var(--fg)'}
+let Renderer = undefined
+let AnimationSpeed = 1
+let State = {}
+const svgns = 'http://www.w3.org/2000/svg'
+function apogee(probe, model) {
+    const {start, view, trench} = model
+    let px = start.x
+    let py = start.y
+    let vx = probe.vx
+    let vy = probe.vy
+    let apo = py
+    while (true) {
+        if (px < view.origin.x || px >= (view.origin.x + view.size.w) || py >= (view.origin.y + view.size.h)) {
+            return
+        }
+        if (px >= trench.left && px <= trench.right && py >= trench.top && py <= trench.bottom) {
+            return apo
+        }
+        px += vx
+        py += vy
+        vx += -Math.sign(vx)
+        vy += 1
+        apo = Math.min(apo, py)
+    }
+}
+function zoomOuty(state, dytop) {
+    const {model, canvas, canvasSize, grid} = state
+    const {start, view, trench} = model
+    view.size.h += dytop
+    start.y += dytop
+    trench.top += dytop
+    trench.bottom += dytop
+    for (let probe of model.probes) {
+        if (probe.py !== undefined) {
+            probe.py += dytop
+            probe.ty += dytop
+            probe.el.setAttribute('y', probe.py * grid.dy)
+        }
+    }
+    let ely = dytop
+    for (let el of view.gridPane.children) {
+        el.setAttribute('y', ely * grid.dy)
+        ely += 1
+    }
+    let topel = view.gridPane.firstChild
+    let srow = Symbols.sea.repeat(view.size.w)
+    for (let y = 0; y < dytop; ++y) {
+        let t = document.createElementNS(svgns, 'text')
+        t.textContent = srow
+        t.setAttribute('y', y * grid.dy)
+        t.setAttribute('fill', Colors.grid)
+        view.gridPane.insertBefore(t, topel)
+    }
+    let scale = Math.min(canvasSize.w/(view.size.w * grid.dx), canvasSize.h/(view.size.h * grid.dy))
+    view.scalingPane.setAttribute('transform', `scale(${scale})`)
+}
+function explore(state, ts, dt) {
+    switch (state.stage) {
+        case 0: {
+            const {model, canvas, canvasSize, grid} = state
+            const trench = model.trench
+            let pad = 1
+            let cw = 2*pad + 1 + Math.max(Math.abs(trench.left), Math.abs(trench.right))
+            let ch = 2*pad + 2 + Math.max(Math.abs(trench.top), Math.abs(trench.bottom))
+            let ox = -pad + Math.min(0, trench.left, trench.right)
+            let oy = -(pad+1) + Math.min(0, trench.top, trench.bottom)
+            const view = {origin:{x:0, y:0}, size:{w:cw, h:ch}}
+            model.view = view
+            model.start = {x:-ox, y:-oy}
+            trench.left -= ox
+            trench.right -= ox
+            trench.top -= oy
+            trench.bottom -= oy
+            let tlo = [...new Array(ch)].map(_ => [...new Array(cw)].map(_ => Symbols.sea))
+            for (let y = trench.top; y < trench.bottom+1; ++y) {
+                for (let x = trench.left; x < trench.right+1; ++x) {
+                    tlo[y][x] = Symbols.trench
+                }
+            }
+            tlo[model.start.y][model.start.x] = Symbols.start
+            let scalingel = document.createElementNS(svgns, 'g')
+            let scale = Math.min(canvasSize.w/(view.size.w * grid.dx), canvasSize.h/(view.size.h * grid.dy))
+            scalingel.setAttribute('transform', `scale(${scale})`)
+            canvas.appendChild(scalingel)
+            model.view.scalingPane = scalingel
+            let tg = document.createElementNS(svgns, 'g')
+            scalingel.appendChild(tg)
+            model.view.gridPane = tg
+            let pg = document.createElementNS(svgns, 'g')
+            scalingel.appendChild(pg)
+            model.view.probesPane = pg
+            for (let [y, row] of tlo.entries()) {
+                let t = document.createElementNS(svgns, 'text')
+                t.textContent = row.join('')
+                t.setAttribute('y', y * grid.dy)
+                t.setAttribute('fill', Colors.grid)
+                tg.appendChild(t)
+            }
+            state.ansel.textContent = model.hits + ' hits'
+            state.anim = {start:ts, end:(ts + 0 / AnimationSpeed)}
+            state.stage += 1
+            break
+        }
+        case 1: {
+            if (ts >= state.anim.end) {
+                const {model, canvas, canvasSize, grid} = state
+                const {view, trench} = model
+                let active = new Array()
+                for (let probe of model.probes) {
+                    if (probe.px === undefined) {
+                        let apx = apogee(probe, model)
+                        if (apx < view.origin.y) {
+                            zoomOuty(state, -apx)
+                        }
+                        probe.tx = probe.px = model.start.x
+                        probe.ty = probe.py = model.start.y
+                        probe.accx = -Math.sign(probe.vx)
+                        probe.accy = 1
+                        let el = document.createElementNS(svgns, 'text')
+                        el.setAttribute('fill', Colors.probe)
+                        el.textContent = Symbols.probe
+                        view.probesPane.appendChild(el)
+                        probe.el = el
+                    }
+                    if (probe.px >= view.origin.x && probe.px < (view.origin.x + view.size.w) &&
+                        probe.py >= view.origin.y && probe.py < (view.origin.y + view.size.h)) {
+                            if (probe.px !== probe.tx || probe.py !== probe.ty) {
+                                let t = Math.min(1, (ts - probe.anim.start)/1000 * AnimationSpeed)
+                                probe.px = probe.ox + t * (probe.tx - probe.ox)
+                                probe.py = probe.oy + t * (probe.ty - probe.oy)
+                                probe.el.setAttribute('x', probe.px * grid.dx)
+                                probe.el.setAttribute('y', probe.py * grid.dy)
+                            }
+                            else {
+                                if (probe.px >= trench.left && probe.px <= trench.right &&
+                                    probe.py >= trench.top && probe.py <= trench.bottom) {
+                                    model.hits += 1
+                                    probe.done = true
+                                    state.ansel.textContent = model.hits + ' hits'
+                                }
+                                else {
+                                    probe.ox = probe.px
+                                    probe.oy = probe.py
+                                    probe.tx = probe.px + probe.vx
+                                    probe.ty = probe.py + probe.vy
+                                    probe.accx = -Math.sign(probe.vx)
+                                    probe.vx += probe.accx
+                                    probe.vy += probe.accy
+                                    probe.anim = {start:ts}
+                                }
+                            }
+                    }
+                    else {
+                        probe.done = true
+                    }
+                    if (probe.done) {
+                        view.probesPane.removeChild(probe.el)
+                    }
+                    else {
+                        active.push(probe)
+                    }
+                }
+                model.probes = active
+                state.anim = {start:ts, end:(ts + 1 / AnimationSpeed)}
+                state.done = active.length === 0
+            }
+            break
+        }
+        default: {
+            state.done = true
+        }
+    }
+}
+let lastFrameTimestamp = 0
+function ticker(ts) {
+    if (!lastFrameTimestamp) {
+        lastFrameTimestamp = ts
+    }
+    else {
+        let dt = ts - lastFrameTimestamp
+        lastFrameTimestamp = ts
+        explore(State, ts, dt)
+        if (State.done) {
+            Renderer = undefined
+            return
+        }
+    }
+    if (Renderer) {
+        Renderer = requestAnimationFrame(ticker)
+    }
+}
+function animate() {
+    if (!Renderer) {
+        lastFrameTimestamp = 0
+        State.done = false
+        Renderer = requestAnimationFrame(ticker)
+    }
+}
+function clear(el) {
+    while (el.firstChild) { el.removeChild(el.lastChild) }
+}
+function addNum(parent, label, value) {
+    let lbl = document.createElement('label')
+    lbl.textContent = label
+    parent.appendChild(lbl)
+    let num = document.createElement('input')
+    num.setAttribute('type', 'number')
+    num.setAttribute('value', value)
+    lbl.appendChild(num)
+    return num
+}
+function createControls(panel) {
+    clear(panel)
+    let form = document.createElement('form')
+    panel.appendChild(form)
+    form.addEventListener('submit', lauchProbe)
+    let t = document.createElement('div')
+    t.textContent = 'velocity'
+    form.appendChild(t)
+    let row = document.createElement('div')
+    form.appendChild(row)
+    addNum(row, 'x:', 1).setAttribute('id', 'vx')
+    addNum(row, ' y:', 1).setAttribute('id', 'vy')
+    let btn = document.createElement('button')
+    btn.textContent = 'Launch'
+    form.appendChild(btn)
+}
+function lauchProbe(e) {
+    e.preventDefault()
+    let vx = parseInt(document.querySelector('#vx').value)
+    let vy = parseInt(document.querySelector('#vy').value)
+    State.model.probes.push({vx:vx, vy:-vy})
+    animate()
+}
+function startGame() {
+    if (Renderer) {
+        cancelAnimationFrame(Renderer)
+        Renderer = undefined
+    }
+    document.querySelector('.fm button').blur()
+    const ansel = document.getElementById('hits')
+    const board = document.getElementById('gfx')
+    clear(board)
+    let input = document.getElementById('input').value
+    let [ax,bx,ay,by] = input.match(/-?\d+/g).map(x => parseInt(x))
+    let trench = {left:ax, right:bx, w:(bx-ax+1), top:-by, bottom:-ay, h:(ay-by+1)}
+    createControls(document.getElementById('cp'))
+    let canvas = document.createElementNS(svgns, 'svg')
+    board.appendChild(canvas)
+    let canvasWidth = 600
+    let canvasHeight = 400
+    const hh = function() {
+        let sample = document.createElementNS(svgns, 'text')
+        sample.textContent = 'W'
+        canvas.appendChild(sample)
+        let bbox = sample.getBBox()
+        canvas.removeChild(sample)
+        return {dx:bbox.width, dy:bbox.height}
+    }()
+    let grid = {dx:hh.dx, dy:hh.dy, zoom:1}
+    canvas.setAttribute('width', canvasWidth)
+    canvas.setAttribute('height', canvasHeight)
+    State = {
+        stage: 0,
+        model: {trench:trench, probes:[], hits:0},
+        grid: grid,
+        canvas: canvas,
+        canvasSize: {w:canvasWidth, h:canvasHeight},
+        ansel: ansel,
+    }
+    animate()
+}
+function setupApp() {
+    document.querySelector('.fm #play').addEventListener('click', startGame)
+}
+window.addEventListener('DOMContentLoaded', setupApp)
+</script>
+<noscript>no javascript</noscript>
+</body>
+</html>
