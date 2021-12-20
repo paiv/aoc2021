@@ -12,5 +12,6 @@ title: Advent of Code 2021
 * [Day 13: Transparent Origami](day/13/)
 * [Day 14: Extended Polymerization](day/14/)
 * [Day 15: Chiton](day/15/)
+* [Day 16: Packet Decoder](day/16/)
 * [Day 17: Trick Shot](day/17/)
 * [Day 20: Trench Map](day/20/)

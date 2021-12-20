@@ -1,0 +1,1157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Day 16: Packet Decoder</title>
+
+<style media="screen">
+:root {--bg:#fff; --fg:#000; --lb:#b8b8b8; --lf:#474747;}
+@media (prefers-color-scheme:dark) {:root {--bg:#202124; --fg:#f1f3f4; --lb:#5F626B; --lf:#abadad;}}
+body, body * {background:var(--bg); color:var(--fg);}
+noscript {position:absolute; top:0; left:25%; background:magenta; color:white; padding:1em;}
+textarea {margin-top:1em; width:10em; height:4em; font-family:monospace;}
+#gfx {position:relative; display:flex; flex-direction:column; flex-grow:1; margin:1rem; font-family:monospace;}
+.flx {display:flex;}
+.fe {display:flex; justify-content:flex-end;}
+.fm > * {margin:1rem 0 0 0rem;}
+.sc {position:absolute; margin:0; overflow:auto;}
+#speed {width:4em;}
+</style>
+</head>
+<body>
+
+<a href="../..">paiv</a> ::
+<a href="https://adventofcode.com/2021/day/16">aoc:day/16</a>
+
+<div class="flx">
+
+<div class="fm">
+    <textarea id="input"
+>9C0141080250320F1802104A08
+</textarea>
+    <div class="fe">
+        <button type="button" id="play" title="Power On">⏻</button>
+    </div>
+    <div><form id="sform">
+        <label for="speed" title="Speed">⌁</label>
+        <input type="number" id="speed" value="1" min="0"/>
+    </form></div>
+    <div>
+        <label for"alu" title="Arithmetic logic unit"><input type="checkbox" id="alu" checked/>ALU</label>
+    </div>
+</div>
+
+<div id="gfx">
+</div>
+
+</div>
+
+<script type="text/javascript">
+let Renderer = undefined
+let AnimationSpeed = 1
+let State = {}
+const svgns = 'http://www.w3.org/2000/svg'
+const OpNames = new Map([[0,'sum'], [1,'mul'], [2,'min'], [3,'max'], [4,'int'], [5,'gt'], [6,'lt'], [7,'eq']])
+function* bitstream(hexdata) {
+    for (let s of hexdata.trim()) {
+        let v = parseInt(s,16)
+        for (let i = 3; i > -1; --i) {
+            yield (v >> i) & 1
+        }
+    }
+}
+function uiSvgView(grid, x, y, w, h) {
+    let view = document.createElementNS(svgns, 'svg')
+    view.setAttribute('x', x * grid.dx)
+    view.setAttribute('y', y * grid.dy)
+    view.setAttribute('width', w * grid.dx)
+    view.setAttribute('height', h * grid.dy)
+    view.addLabel = (text, x, y) => {
+        let el = uiLabel(grid, text, x, y)
+        view.appendChild(el)
+        return el
+    }
+    view.addLoLabel = (text, x, y) => {
+        let el = view.addLabel(text, x, y)
+        el.setAttribute('fill', 'var(--lf)')
+        return el
+    }
+    return view
+}
+function uiLabel(grid, text, x, y) {
+    let el = document.createElementNS(svgns, 'text')
+    el.setAttribute('x', x * grid.dx)
+    el.setAttribute('y', y * grid.dy)
+    el.textContent = text
+    el.setAttribute('fill', 'var(--fg)')
+    el.setX = ((x) => {el.setAttribute('x', x * grid.dx)})
+    el.setY = ((y) => {el.setAttribute('y', y * grid.dy)})
+    return el
+}
+function uiPane(grid, title, x, y, w, h) {
+    let view = uiSvgView(grid, x, y, w, h)
+    let border = document.createElementNS(svgns, 'rect')
+    border.setAttribute('x', 0)
+    border.setAttribute('y', 0)
+    border.setAttribute('width', '100%')
+    border.setAttribute('height', '100%')
+    border.setAttribute('rx', grid.dx / 2)
+    border.setAttribute('ry', grid.dx / 2)
+    border.setAttribute('fill', 'var(--bg)')
+    border.setAttribute('stroke', 'var(--fg)')
+    view.appendChild(border)
+    let tx = view.addLoLabel(title, 1, 0.8)
+    tx.setAttribute('font-size', 'smaller')
+    view.setTitle = (title) => {tx.textContent = title}
+    return view
+}
+function l1dist(grid, a, b) {
+    return Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) * grid.dy / grid.dx
+}
+function buildSegments(grid, points) {
+    const sdist = points.slice(1).map((p,i) => l1dist(grid, points[i], p))
+    const adist = sdist.reduce((a,d,i) => {a.push(d + a[a.length-1]); return a}, [0])
+    return points.slice(1).reduce((a,p,i) => {
+        let s = points[i]
+        let d = l1dist(grid, s, p)
+        let t = adist[i] / adist[adist.length-1]
+        let td = adist[i+1] / adist[adist.length-1] - t
+        a.push({tstart:t, tdist:td, start:s, end:p, dist:d})
+        return a
+    }, [])
+}
+function makeWire(ui, start, ...points) {
+    const {grid, layers} = ui
+    const [x,y] = start
+    let so = `M ${x*grid.dx} ${y*grid.dy} L`
+    for (let [x,y] of points) {
+        so += ` ${x*grid.dx} ${y*grid.dy}`
+    }
+    let path = document.createElementNS(svgns, 'path')
+    path.setAttribute('d', so)
+    path.setAttribute('fill', 'none')
+    path.setAttribute('stroke', 'var(--fg)')
+    path.points = [start].concat(points)
+    path.segments = buildSegments(grid, path.points)
+    path.rsegments = buildSegments(grid, path.points.slice().reverse())
+    path.dist = path.segments.reduce((a,s) => a+s.dist, 0)
+    layers.wires.appendChild(path)
+    return path
+}
+function makeParticle(ui, m, wire) {
+    const {grid, layers} = ui
+    const pt = document.createElementNS(svgns, 'circle')
+    pt.setAttribute('r', grid.dx / 2.7)
+    pt.setAttribute('fill', 'var(--fg)')
+    layers.particles.appendChild(pt)
+    pt.positionOnSegment = (segment, t) => {
+        const [ax, ay] = segment.start
+        const [bx, by] = segment.end
+        const q = Math.min(1, (t - segment.tstart) / segment.tdist)
+        let x = ax + q * (bx - ax)
+        let y = ay + q * (by - ay)
+        pt.setAttribute('cx', x*grid.dx)
+        pt.setAttribute('cy', y*grid.dy)
+    }
+    const tstart = m.start
+    const tend = m.end
+    const segments = m.isresponse ? wire.rsegments : wire.segments
+    pt.tick = (ts) => {
+        let t = Math.min(1, (ts - tstart) / (tend - tstart))
+        let segment = segments.reduce((a, s) => (s.tstart <= t ? s : a), undefined)
+        pt.positionOnSegment(segment, t)
+    }
+    pt.destroy = () => {
+        layers.particles.removeChild(pt)
+    }
+    return pt
+}
+function makeWidget(ui, title, x, y, w, h) {
+    let view = ui.makePane(title, x, y, w, h)
+    ui.layers.widgets.appendChild(view)
+    ui.growCanvas(x+w, y+h)
+    return {view}
+}
+function makeByteReader(ui, mq, x, y, w, h) {
+    let widget = makeWidget(ui, 'byte reader', x, y, w, h)
+    let hexel = widget.view.addLabel('', 1, 2)
+    widget.view.addLoLabel('↑↑', 1, 3)
+    widget.setBuffer = (s) => {widget._buffer = s}
+    widget.setHex = (s) => {hexel.textContent = s}
+    state = {stage:0}
+    widget.mq_receive = (m) => {
+        if (m.msg === 'reset') {
+            let [data] = m.args
+            state = {stage:0, data}
+            widget.setHex(data)
+            return
+        }
+        switch (state.stage) {
+            case 0: {
+                if (m.msg === 'byte') {
+                    widget.setHex(state.data)
+                    if (state.data && state.data.length) {
+                        state.pending_data = state.data.substring(0,2)
+                        state.data = state.data.substring(2)
+                        state.stage += 1
+                        mq.send('byte_reader', 'byte_reader', 'poll')
+                    }
+                    else {
+                        mq.halt()
+                    }
+                }
+                break
+            }
+            case 1: {
+                if (m.msg === 'poll') {
+                    mq.respond('byte_reader', 'bit_stream', 'byte', state.pending_data)
+                    state.stage = 0
+                }
+                break
+            }
+            default: {
+                state = {stage:0}
+            }
+        }
+    }
+    return widget
+}
+function makeBitStream(ui, mq, x, y, w, h) {
+    let widget = makeWidget(ui, 'bit stream', x, y, w, h)
+    let bitel = widget.view.addLabel('', 1, 2)
+    let posel = widget.view.addLoLabel('↑', 1, 3)
+    widget.setBits = (s) => {bitel.textContent = s}
+    widget.setBitPos = (x) => {posel.setX(x + 1 + (x > 7 ? 0 : x > 3 ? 1 : 0))}
+    widget.formatBuffer = (buf) => {
+        let hs = new Array()
+        for (let i = 0; i < buf.length; i += 4) {
+            hs.push(buf.slice(i, i+4).map(x => x.toString()).join(''))
+        }
+        let s = hs.join(' ')
+        widget.setBits(s)
+    }
+    let state = {stage:0}
+    widget.mq_receive = (m) => {
+        if (m.msg === 'reset') {
+            state = {stage:0}
+            widget.setBits('')
+            widget.setBitPos(0)
+            return
+        }
+        switch (state.stage) {
+            case 0: {
+                if (m.msg === 'bits') {
+                    let [w] = m.args
+                    state.bits_requested = Math.max(0, w)
+                    if (state.bits_requested) {
+                        let hasbits = state.buffer && state.buffer.length
+                        state.stage = hasbits ? 3 : 1
+                        mq.signal('bit_stream', 'poll')
+                    }
+                }
+                break
+            }
+            case 1: {
+                if (m.msg === 'poll') {
+                    state.stage += 1
+                    widget.setBits('')
+                    state.bits_sent = 0
+                    widget.setBitPos(state.bits_sent)
+                    mq.send('bit_stream', 'byte_reader', 'byte')
+                }
+                break
+            }
+            case 2: {
+                if (m.msg === 'byte') {
+                    let [s] = m.args
+                    state.buffer = [...bitstream(s)]
+                    state.stage += 1
+                    widget.formatBuffer(state.buffer)
+                    mq.signal('bit_stream', 'poll')
+                }
+                break
+            }
+            case 3: {
+                if (m.msg === 'poll') {
+                    if (state.buffer && state.buffer.length) {
+                        let x = state.buffer.shift()
+                        state.bits_requested -= 1
+                        state.bits_sent += 1
+                        state.stage += 1
+                        mq.respond('bit_stream', 'integer_parser', 'bit', x)
+                    }
+                    else {
+                        state.stage = 1
+                        mq.signal('bit_stream', 'poll')
+                    }
+                }
+                break
+            }
+            case 4: {
+                if (m.msg === 'ack') {
+                    widget.setBitPos(state.bits_sent)
+                    if (state.bits_requested <= 0) {
+                        state.stage = 0
+                    }
+                    else {
+                        state.stage = 3
+                        mq.signal('bit_stream', 'poll')
+                    }
+                }
+                break
+            }
+            default: {
+                state = {stage:0}
+            }
+        }
+    }
+    return widget
+}
+function makeIntegerParser(ui, mq, x, y, w, h) {
+    let widget = makeWidget(ui, 'integer', x, y, w, h)
+    let sbitel = widget.view.addLabel('s: 0', 2, 2)
+    let bitel = widget.view.addLabel('', 2, 3)
+    let intel = widget.view.addLabel('', 2, 5)
+    let vosel = widget.view.addLoLabel('→', 1, 3)
+    let posel = widget.view.addLoLabel('↑', 2, 4)
+    widget.setTitle = (s) => {widget.view.setTitle('integer' + (s ? ' ' + s : ''))}
+    widget.setSignBit = (s) => {sbitel.textContent = 's: ' + s}
+    widget.setBits = (s) => {bitel.textContent = s}
+    widget.setBitPos = (x) => {posel.setX(x + 2)}
+    widget.setYPos = (y) => {vosel.setY(y + 2)}
+    widget.setValue = (s) => {intel.textContent = '' + s}
+    let state = {stage:0}
+    widget.mq_receive = (m) => {
+        if (m.msg === 'reset') {
+            state = {stage:0}
+            widget.setTitle('')
+            widget.setSignBit(0)
+            widget.setBits('')
+            widget.setBitPos(0)
+            widget.setYPos(0)
+            widget.setValue('')
+            return
+        }
+        switch (state.stage) {
+            case 0: {
+                if (m.msg === 'int') {
+                    let [w] = m.args
+                    state.value = 0
+                    state.bit_len = w
+                    state.bits_left = w
+                    state.bits = new Array()
+                    state.stage += 1
+                    widget.setTitle(`[${w}]`)
+                    widget.setSignBit(0)
+                    widget.setBits('?'.repeat(state.bits_left))
+                    widget.setBitPos(state.bits.length)
+                    widget.setYPos(1)
+                    widget.setValue(state.value)
+                    mq.send('integer_parser', 'bit_stream', 'bits', w)
+                }
+                else if (m.msg === 'vlq') {
+                    state.value = 0
+                    state.bit_len = 5
+                    state.bits_left = 4
+                    state.bits = new Array()
+                    state.stage = 2
+                    widget.setTitle('[~]')
+                    widget.setSignBit('?')
+                    widget.setBits('?'.repeat(state.bits_left))
+                    widget.setBitPos(state.bits.length)
+                    widget.setYPos(0)
+                    widget.setValue(state.value)
+                    mq.send('integer_parser', 'bit_stream', 'bits', 1)
+                }
+                break
+            }
+            case 1: {
+                if (m.msg === 'bit') {
+                    let [x] = m.args
+                    state.bits.push(x)
+                    state.value = state.value * 2 + x
+                    state.bits_left -= 1
+                    widget.setBits(state.bits.map(x => x.toString()).join('') + '?'.repeat(state.bits_left))
+                    widget.setBitPos(state.bits.length + (state.bits_left ? 0 : -1))
+                    widget.setValue(state.value)
+                    mq.signal('bit_stream', 'ack')
+                    if (state.bits_left <= 0) {
+                        let v = state.value
+                        let w = state.bit_len
+                        state = {stage:0}
+                        mq.respond('integer_parser', 'packet_assembler', 'int', v, w)
+                    }
+                }
+                break
+            }
+            case 2: {
+                if (m.msg === 'bit') {
+                    let [x] = m.args
+                    state.sign_bit = x
+                    widget.setSignBit(state.sign_bit)
+                    widget.setYPos(1)
+                    mq.signal('bit_stream', 'ack')
+                    state.stage += 1
+                    mq.send('integer_parser', 'bit_stream', 'bits', state.bits_left)
+                }
+                break
+            }
+            case 3: {
+                if (m.msg === 'bit') {
+                    let [x] = m.args
+                    state.bits.push(x)
+                    state.value = state.value * 2 + x
+                    state.bits_left -= 1
+                    widget.setBits(state.bits.map(x => x.toString()).join('') + '?'.repeat(state.bits_left))
+                    widget.setBitPos(state.bits.length + (state.bits_left ? 0 : -1))
+                    widget.setValue(state.value)
+                    mq.signal('bit_stream', 'ack')
+                    if (state.bits_left <= 0) {
+                        if (state.sign_bit) {
+                            state.bit_len += 5
+                            state.bits_left = 4
+                            state.stage = 2
+                            widget.setSignBit('?')
+                            widget.setYPos(1)
+                            mq.send('integer_parser', 'bit_stream', 'bits', 1)
+                        }
+                        else {
+                            let v = state.value
+                            let w = state.bit_len
+                            state = {stage:0}
+                            mq.respond('integer_parser', 'packet_assembler', 'int', v, w)
+                        }
+                    }
+                }
+                break
+            }
+            default: {
+                state = {stage:0}
+            }
+        }
+    }
+    return widget
+}
+function makePacketAssembler(ui, mq, x, y, w, h) {
+    let widget = makeWidget(ui, 'packet', x, y, w, h)
+    let verel = widget.view.addLabel('ver:', 2, 2)
+    let typel = widget.view.addLabel('typ:', 2, 3)
+    let valel = widget.view.addLabel('___:', 2, 4)
+    let posel = widget.view.addLoLabel('→', 1, 2)
+    widget.setPos = (y) => {posel.setY(y + 2)}
+    widget.setVersion = (s) => {verel.textContent = 'ver: ' + s}
+    widget.setType = (s) => {typel.textContent = 'typ: ' + s}
+    widget.setValue = (s) => {valel.textContent = 'val: ' + s}
+    widget.setSubMode = (s) => {valel.textContent = '\u00A0\u00A0t: ' + s}
+    widget.setSubCount = (s) => {valel.textContent = 'num: ' + s}
+    widget.setSubLength = (s) => {valel.textContent = 'len: ' + s}
+    widget.resetViews = () => {
+        widget.setVersion('')
+        widget.setType('')
+        valel.textContent = '___:'
+        widget.setPos(0)
+    }
+    let state = {stage:0}
+    widget.mq_receive = (m) => {
+        if (m.msg === 'reset') {
+            state = {stage:0}
+            widget.resetViews()
+            return
+        }
+        switch (state.stage) {
+            case 0: {
+                if (m.msg === 'packet') {
+                    state.stage += 1
+                    widget.resetViews()
+                    widget.setVersion('?')
+                    mq.send('packet_assembler', 'integer_parser', 'int', 3)
+                }
+                break
+            }
+            case 1: {
+                if (m.msg === 'int') {
+                    state.stage += 1
+                    let [x] = m.args
+                    state.packet_version = x
+                    widget.setVersion(state.packet_version)
+                    widget.setType('?')
+                    widget.setPos(1)
+                    mq.send('packet_assembler', 'integer_parser', 'int', 3)
+                }
+                break
+            }
+            case 2: {
+                if (m.msg === 'int') {
+                    let [x] = m.args
+                    state.packet_type = x
+                    state.packet_len = 6
+                    widget.setType(state.packet_type)
+                    widget.setPos(2)
+                    if (state.packet_type === 4) {
+                        state.stage = 3
+                        widget.setValue('?')
+                        mq.send('packet_assembler', 'integer_parser', 'vlq')
+                    }
+                    else {
+                        state.stage = 4
+                        widget.setSubMode('?')
+                        mq.send('packet_assembler', 'integer_parser', 'int', 1)
+                    }
+                }
+                break
+            }
+            case 3: {
+                if (m.msg === 'int') {
+                    state.stage += 1
+                    let [x,w] = m.args
+                    state.packet_value = x
+                    state.packet_len += (w || 0)
+                    widget.setValue(state.packet_value)
+                    const packet = {
+                        ver: state.packet_version,
+                        typ: state.packet_type,
+                        val: state.packet_value,
+                        len: state.packet_len,
+                        iscomplete: true,
+                    }
+                    state = {stage:0}
+                    mq.respond('packet_assembler', 'packet_stack', 'packet', packet)
+                }
+                break
+            }
+            case 4: {
+                if (m.msg === 'int') {
+                    state.stage += 1
+                    let [x,w] = m.args
+                    state.is_counting_subpackets = x
+                    state.packet_len += (w||0)
+                    widget.setSubMode(state.is_counting_subpackets)
+                    mq.send('packet_assembler', 'integer_parser', 'int', x ? 11 : 15)
+                    mq.send('packet_assembler', 'packet_assembler', 'poll')
+                }
+                break
+            }
+            case 5: {
+                if (m.msg === 'int') {
+                    let [x,w] = m.args
+                    state.packet_len += (w || 0)
+                    const packet = {
+                        ver: state.packet_version,
+                        typ: state.packet_type,
+                        len: state.packet_len,
+                    }
+                    if (state.is_counting_subpackets) {
+                        packet.sub_count = x
+                        widget.setSubCount(packet.sub_count)
+                    }
+                    else {
+                        packet.sub_len = x
+                        widget.setSubLength(packet.sub_len)
+                    }
+                    state = {stage:0}
+                    mq.respond('packet_assembler', 'packet_stack', 'packet', packet)
+                }
+                else if (m.msg === 'poll') {
+                    if (state.is_counting_subpackets) {
+                        widget.setSubCount('?')
+                    }
+                    else {
+                        widget.setSubLength('?')
+                    }
+                }
+                break
+            }
+            default: {
+                state = {stage:0}
+            }
+        }
+    }
+    return widget
+}
+function makePacketStack(ui, mq, x, y, w, h) {
+    let widget = makeWidget(ui, 'stack', x, y, w, h)
+    const board = document.getElementById('gfx')
+    let content = document.createElement('pre')
+    content.classList.add('sc')
+    board.appendChild(content)
+    content.style.left = (x+1)*ui.grid.dx + 'px'
+    content.style.top = (y+1.25)*ui.grid.dy + 'px'
+    content.style.width = (w-1.5)*ui.grid.dx + 'px'
+    content.style.height = (h-1.5)*ui.grid.dy + 'px'
+    widget.setContent = (s) => {content.textContent = s}
+    function formatPacket(p, indent=0) {
+        if (p.aluval !== undefined) {
+            return ' '.repeat(indent) + (p.aluval).toString()
+        }
+        let ver = (p.ver !== undefined ? p.ver : '?')
+        let typ = OpNames.get(p.typ) || '?'
+        let til = (p.typ === 4) ? 'val' : (p.sub_count !== undefined ? 'num' : 'len')
+        let val = (p.typ === 4) ? p.val : (p.sub_count !== undefined ? p.sub_count :
+            (p.sub_len !== undefined ? p.sub_len : '?'))
+        let ps = ' '.repeat(indent) + `(${ver}, ${typ}) ${til}:${val}`
+        let sub = p.subpackets ? p.subpackets.map(s => formatPacket(s, indent+2)) : []
+        let incomplete = isPacketComplete(p) ? '' : ('\n' + ' '.repeat(indent+2) + '...')
+        return [ps].concat(sub).join('\n') + incomplete
+    }
+    function formatContent(stack) {
+        let so = stack.slice().reverse().map(p => formatPacket(p,1)).join('\n')
+        so = '→' + so.substring(1)
+        widget.setContent(so)
+    }
+    function packetLength(p) {
+        let n = (p.len||0) + (p.subpackets ? (p.subpackets.reduce((a,s) => a+packetLength(s), 0)) : 0)
+        return n
+    }
+    function isPacketComplete(p) {
+        if (p.iscomplete) { return true }
+        if (p.typ === 4) {
+            p.iscomplete = p.val !== undefined
+        }
+        else if (p.sub_count !== undefined) {
+            p.iscomplete = p.subpackets && p.subpackets.length >= p.sub_count
+        }
+        else if (p.sub_len !== undefined) {
+            if (p.subpackets) {
+                let len = p.subpackets.reduce((a,s) => a+packetLength(s), 0)
+                p.iscomplete = len >= p.sub_len
+            }
+        }
+    }
+    function reduceStack(stack) {
+        let reduced = false
+        while (stack.length > 1) {
+            let last = stack[stack.length-1]
+            if (isPacketComplete(last)) {
+                let next = stack[stack.length-2]
+                if (!isPacketComplete(next)) {
+                    if (!next.subpackets) {
+                        next.subpackets = new Array()
+                    }
+                    next.subpackets.push(last)
+                    stack.pop()
+                    reduced = true
+                    continue
+                }
+            }
+            break
+        }
+        return reduced
+    }
+    function pendingEval(stack) {
+        if (!(stack && stack.length)) { return }
+        let p = stack[stack.length-1]
+        if (p.aluval === undefined && isPacketComplete(p)) {
+            return p
+        }
+    }
+    let state = {stage:0}
+    widget.mq_receive = (m) => {
+        if (m.msg === 'reset') {
+            state = {stage:0}
+            return
+        }
+        else if (m.msg === 'restart') {
+            state.stage = 0
+            return
+        }
+        switch (state.stage) {
+            case 0: {
+                if (m.msg === 'reduce') {
+                    if (!state.stack) {
+                        state.stack = new Array()
+                    }
+                    let foreval = pendingEval(state.stack)
+                    if (widget.isAluOn && foreval) {
+                        state.stage = 2
+                        mq.send('packet_stack', 'alu', 'packet', foreval)
+                    }
+                    else if (reduceStack(state.stack)) {
+                        mq.send('packet_stack', 'packet_stack', 'reduce')
+                    }
+                    else {
+                        state.stage += 1
+                        mq.send('packet_stack', 'packet_assembler', 'packet')
+                    }
+                    formatContent(state.stack)
+                }
+                break
+            }
+            case 1: {
+                if (m.msg === 'packet') {
+                    let [packet] = m.args
+                    state.stage = 0
+                    state.stack.push(packet)
+                    formatContent(state.stack)
+                    mq.send('packet_stack', 'packet_stack', 'reduce')
+                }
+                break
+            }
+            case 2: {
+                if (m.msg === 'packet') {
+                    let [packet] = m.args
+                    state.stage = 0
+                    state.stack.pop()
+                    state.stack.push(packet)
+                    formatContent(state.stack)
+                    mq.send('packet_stack', 'packet_stack', 'reduce')
+                }
+                break
+            }
+            default: {
+                state = {stage:0}
+            }
+        }
+    }
+    return widget
+}
+function makeAlu(ui, mq, x, y, w, h) {
+    let widget = makeWidget(ui, 'alu', x, y, w, h)
+    let posel = widget.view.addLoLabel('→', 1, 2)
+    let typel = widget.view.addLabel('', 2, 2)
+    let valel = widget.view.addLabel('', 2, 3)
+    widget.setOpName = (s) => {typel.textContent = s}
+    widget.setAluValue = (s) => {valel.textContent = s}
+    const ops = new Map([
+        [0, (p) => p.subpackets.reduce((a,s) => a + s.aluval, 0)],
+        [1, (p) => p.subpackets.reduce((a,s) => a * s.aluval, 1)],
+        [2, (p) => p.subpackets.reduce((a,s) => Math.min(a, s.aluval), Infinity)],
+        [3, (p) => p.subpackets.reduce((a,s) => Math.max(a, s.aluval), -Infinity)],
+        [4, (p) => p.val],
+        [5, (p) => {let [a,b] = p.subpackets; return 0 + (a.aluval > b.aluval)}],
+        [6, (p) => {let [a,b] = p.subpackets; return 0 + (a.aluval < b.aluval)}],
+        [7, (p) => {let [a,b] = p.subpackets; return 0 + (a.aluval === b.aluval)}],
+    ])
+    widget.mq_receive = (m) => {
+        if (m.msg === 'packet') {
+            let [p] = m.args
+            widget.setOpName(OpNames.get(p.typ))
+            let op = ops.get(p.typ)
+            p.aluval = op(p)
+            widget.setAluValue(p.aluval)
+            mq.respond('alu', 'packet_stack', 'packet', p)
+        }
+        else if (m.msg === 'reset') {
+            widget.setOpName('')
+            widget.setAluValue('')
+        }
+    }
+    return widget
+}
+function makeMQ() {
+    const DeliverySpeed = 1 / 200
+    const ProcessingTime = 2 / DeliverySpeed
+    let queue = new Array()
+    let buffer = new Array()
+    let qid = 0
+    function enqueue(m) {
+        m.qid = ++qid
+        if (m.end) {
+            if (exports.onwiremessage) {
+                exports.onwiremessage(m)
+            }
+        }
+        queue.push(m)
+        queue.sort((a,b) => (a.end === b.end ? (b.qid - a.qid) : (b.end - a.end)))
+    }
+    function clear() {
+        queue.splice(0)
+        buffer.splice(0)
+    }
+    function makeMessage(from, to, msg, ...args) {
+        const now = performance.now()
+        let dist = 0
+        if (from) {
+            let wire = exports.wires.get(from).get(to)
+            if (wire) {
+                dist = wire.dist || 0
+            }
+        }
+        let obj = {
+            from, to, msg, args,
+            start:now,
+            end:(now + dist / DeliverySpeed / AnimationSpeed),
+        }
+        return obj
+    }
+    function send(from, to, msg, ...args) {
+        let m = makeMessage(from, to, msg, ...args)
+        enqueue(m)
+    }
+    function respond(from, to, msg, ...args) {
+        let m = makeMessage(from, to, msg, ...args)
+        m.isresponse = true
+        enqueue(m)
+    }
+    function signal(to, msg, ...args) {
+        let m = makeMessage(undefined, to, msg, ...args)
+        m.end = 0
+        enqueue(m)
+    }
+    function halt() {
+        signal('machine', 'halt')
+    }
+    function deliveries() {
+        const now = performance.now()
+        let i = queue.findIndex(m => m.end <= now)
+        let popped = (i < 0) ? [] : queue.splice(i).reverse()
+        let deliver = buffer.filter(m => (m.tdelayed <= now)).concat(
+            popped.filter(m => (m.end === 0))
+        )
+        let delay = popped.filter(m => (m.end !== 0))
+        delay.forEach(m => {
+            m.tdelayed = m.end + ProcessingTime / AnimationSpeed
+            if (exports.onmessagedelay) {
+                exports.onmessagedelay(m)
+            }
+        })
+        let keep = buffer.filter(m => (m.tdelayed > now))
+        buffer.splice(0, buffer.length, ...keep)
+        buffer.splice(buffer.length, 0, ...delay)
+        return deliver
+    }
+    const exports = {
+        queue,
+        signal,
+        send,
+        respond,
+        deliveries,
+        clear,
+        halt,
+        wires: undefined,
+        onwiremessage: undefined,
+        onmessagedelay: undefined,
+    }
+    return exports
+}
+function makeMachine(ui, isAluOn) {
+    let mq = makeMQ()
+    ui.layers = {
+        wires: ui.addLayer(),
+        particles: ui.addLayer(),
+        widgets: ui.addLayer(),
+    }
+    let widgets = {
+        byte_reader: makeByteReader(ui, mq, 15, 0, 23, 3.5),
+        bit_stream: makeBitStream(ui, mq, 0, 0, 11, 3.5),
+        integer_parser: makeIntegerParser(ui, mq, 0, 5, 30, 5.5),
+        packet_assembler: makePacketAssembler(ui, mq, 0, 12, 14, 4.5),
+        packet_stack: makePacketStack(ui, mq, 0, 18, 38, 8.5),
+    }
+    let wires = {
+        byte_to_bit_stream: makeWire(ui, [11,1], [15,1]),
+        bit_to_int_parser: makeWire(ui, [13,5], [13,2.5], [11,2.5]),
+        int_to_packet_assembler: makeWire(ui, [14,13], [18,13], [18,10.5]),
+        packet_to_packet_stack: makeWire(ui, [18,18], [18,15.5], [14,15.5]),
+        packet_to_alu: makeWire(ui, [30,18], [30,16.5]),
+    }
+    if (isAluOn) {
+        widgets.alu = makeAlu(ui, mq, 28, 13, 10, 3.5)
+        widgets.packet_stack.isAluOn = true
+    }
+    else {
+        makeWidget(ui, '', 28, 13, 10, 3.5)
+    }
+    let state = {halted:false}
+    function isRunning() {
+        return !state.halted
+    }
+    function start() {
+        state.halted = false
+        mq.signal('packet_stack', 'reduce')
+    }
+    function reset(data) {
+        mq.clear()
+        mq.signal('packet_stack', 'restart')
+        mq.signal('alu', 'reset')
+        mq.signal('packet_assembler', 'reset')
+        mq.signal('integer_parser', 'reset')
+        mq.signal('bit_stream', 'reset')
+        mq.signal('byte_reader', 'reset', data)
+        start()
+    }
+    function mq_receive(m) {
+        if (m.msg === 'halt') {
+            state.halted = true
+        }
+    }
+    function poll() {
+        for (let m of mq.deliveries()) {
+            if (!state.halted) {
+                if (m.to === 'machine') {
+                    mq_receive(m)
+                }
+                else {
+                    widgets[m.to].mq_receive(m)
+                }
+            }
+            removeParticle(m)
+        }
+        const now = performance.now()
+        for (let m of mq.queue) {
+            if (m.particle) {
+                m.particle.tick(now)
+            }
+        }
+    }
+    let connections = new Map()
+    const innerWire = {dist:2, points:[], segments:[]}
+    for (let [from,to,wire] of [
+        ['byte_reader', 'bit_stream', wires.byte_to_bit_stream],
+        ['bit_stream', 'integer_parser', wires.bit_to_int_parser],
+        ['integer_parser', 'packet_assembler', wires.int_to_packet_assembler],
+        ['packet_assembler', 'packet_stack', wires.packet_to_packet_stack],
+        ['packet_stack', 'alu', wires.packet_to_alu],
+    ]) {
+        for (let [a,b] of [[from,to], [to,from]]) {
+            let m = connections.get(a) || new Map()
+            connections.set(a, m)
+            m.set(b, wire)
+            m.set(a, innerWire)
+        }
+    }
+    mq.wires = connections
+    mq.onwiremessage = (m) => {
+        let wire = connections.get(m.from).get(m.to)
+        if (wire.points.length) {
+            let pt = makeParticle(ui, m, wire)
+            m.particle = pt
+        }
+    }
+    function removeParticle(m) {
+        if (m.particle) {
+            m.particle.destroy()
+            m.particle = undefined
+        }
+    }
+    mq.onmessagedelay = (m) => {
+        removeParticle(m)
+    }
+    return {
+        widgets,
+        wires,
+        start,
+        poll,
+        reset,
+        isRunning,
+    }
+}
+function explore(state, ts, dt) {
+    switch (state.stage) {
+        case 0: {
+            state.machine = makeMachine(state.ui, state.isAluOn)
+            state.anim = {start:ts, end:(ts + 1500 / AnimationSpeed)}
+            state.stage += 1
+            break
+        }
+        case 1: {
+            if (ts >= state.anim.end) {
+                state.data = state.runs[state.ridx]
+                state.machine.reset(state.runs[state.ridx])
+                state.stage += 1
+            }
+            break
+        }
+        case 2: {
+            if (state.machine.isRunning()) {
+                state.machine.poll()
+            }
+            else {
+                state.stage += 1
+            }
+            break
+        }
+        case 3: {
+            state.ridx += 1
+            if (state.ridx < state.runs.length) {
+                state.stage = 1
+            }
+            else {
+                state.stage += 1
+            }
+            break
+        }
+        default: {
+            state.done = true
+        }
+    }
+}
+let lastFrameTimestamp = 0
+function ticker(ts) {
+    if (!lastFrameTimestamp) {
+        lastFrameTimestamp = ts
+    }
+    else {
+        let dt = ts - lastFrameTimestamp
+        lastFrameTimestamp = ts
+        explore(State, ts, dt)
+        if (State.done) {
+            Renderer = undefined
+            return
+        }
+    }
+    if (Renderer) {
+        Renderer = requestAnimationFrame(ticker)
+    }
+}
+function animate() {
+    if (!Renderer) {
+        lastFrameTimestamp = 0
+        State.done = false
+        Renderer = requestAnimationFrame(ticker)
+    }
+}
+function pauseAnimation() {
+    if (Renderer) {
+        cancelAnimationFrame(Renderer)
+        Renderer = undefined
+    }
+}
+function clear(el) {
+    while (el.firstChild) { el.removeChild(el.lastChild) }
+}
+function measureGrid(canvas) {
+    let sample = document.createElementNS(svgns, 'text')
+    sample.textContent = 'B'
+    canvas.appendChild(sample)
+    let nn = sample.getComputedTextLength()
+    let bbox = sample.getBBox()
+    canvas.removeChild(sample)
+    return {dx:nn, dy:bbox.height, zoom:1}
+}
+function drawBlank() {
+    const board = document.getElementById('gfx')
+    clear(board)
+    let canvas = document.createElementNS(svgns, 'svg')
+    board.appendChild(canvas)
+    const grid = measureGrid(canvas)
+    canvas.setAttribute('width', grid.dx)
+    canvas.setAttribute('height', grid.dy)
+    let ui = {
+        grid,
+        canvas: canvas,
+        canvasSize: {w:1, h:1},
+        addLayer: (() => {
+            g = document.createElementNS(svgns, 'g')
+            canvas.appendChild(g)
+            return g
+        }),
+        makePane: ((title, x, y, w, h) => uiPane(grid, title, x, y, w, h)),
+    }
+    ui.growCanvas = ((right, bottom) => {
+        let {w,h} = ui.canvasSize
+        w = Math.max(w, right)
+        h = Math.max(h, bottom)
+        ui.canvasSize = {w,h}
+        ui.canvas.setAttribute('width', w * grid.dx + 3)
+        ui.canvas.setAttribute('height', h * grid.dy + 3)
+    }),
+    ui.layers = {
+        wires: ui.addLayer(),
+        widgets: ui.addLayer(),
+    }
+    makeWidget(ui, '', 15, 0, 23, 3.5)
+    makeWidget(ui, '', 0, 0, 11, 3.5)
+    makeWidget(ui, '', 0, 5, 30, 5.5)
+    makeWidget(ui, '', 0, 12, 14, 4.5)
+    makeWidget(ui, '', 28, 13, 10, 3.5)
+    makeWidget(ui, '', 0, 18, 38, 8.5)
+    makeWire(ui, [11,1], [15,1])
+    makeWire(ui, [13,5], [13,2.5], [11,2.5])
+    makeWire(ui, [14,13], [18,13], [18,10.5])
+    makeWire(ui, [18,18], [18,15.5], [14,15.5])
+    makeWire(ui, [30,16.5], [30,18])
+}
+function startGame() {
+    pauseAnimation()
+    document.querySelector('.fm button').blur()
+    const board = document.getElementById('gfx')
+    clear(board)
+    let isAluOn = document.getElementById('alu').checked
+    let input = document.getElementById('input').value
+    let data = input.trim().split('\n')
+    let runs = data.map(s => s.trim())
+    let canvas = document.createElementNS(svgns, 'svg')
+    board.appendChild(canvas)
+    const grid = measureGrid(canvas)
+    canvas.setAttribute('width', grid.dx)
+    canvas.setAttribute('height', grid.dy)
+    let ui = {
+        grid,
+        canvas: canvas,
+        canvasSize: {w:1, h:1},
+        addLayer: (() => {
+            g = document.createElementNS(svgns, 'g')
+            canvas.appendChild(g)
+            return g
+        }),
+        makePane: ((title, x, y, w, h) => uiPane(grid, title, x, y, w, h)),
+    }
+    ui.growCanvas = ((right, bottom) => {
+        let {w,h} = ui.canvasSize
+        w = Math.max(w, right)
+        h = Math.max(h, bottom)
+        ui.canvasSize = {w,h}
+        ui.canvas.setAttribute('width', w * grid.dx + 1)
+        ui.canvas.setAttribute('height', h * grid.dy + 1)
+    }),
+    State = {
+        stage: 0,
+        runs: runs,
+        ridx: 0,
+        isAluOn: isAluOn,
+        ui:ui,
+    }
+    animate()
+}
+function speedInput(e) {
+    e.preventDefault()
+    let el = document.getElementById('speed')
+    let x = parseFloat(el.value)
+    if (el.value === '0') {
+        let step = el.getAttribute('step')
+        if (AnimationSpeed === 1) {
+            x = 0.9
+            step = 0.1
+        }
+        else if (AnimationSpeed === 0.1) {
+            x = 0.09
+            step = 0.01
+        }
+        else {
+            step = 1
+        }
+        el.value = x
+        el.setAttribute('step', step)
+    }
+    else if (el.value === '1') {
+        if (AnimationSpeed === 0.9) {
+            el.setAttribute('step', 1)
+        }
+    }
+    else if (el.value === '0.1') {
+        if (AnimationSpeed === 0.09) {
+            el.setAttribute('step', 0.1)
+        }
+    }
+    if (x > 0) {
+        AnimationSpeed = x
+        animate()
+    }
+    else {
+        pauseAnimation()
+    }
+}
+function setupApp() {
+    drawBlank()
+    document.getElementById('play').addEventListener('click', startGame)
+    document.getElementById('sform').addEventListener('submit', speedInput)
+    let el = document.getElementById('speed')
+    el.addEventListener('input', speedInput)
+    el.value = AnimationSpeed
+}
+window.addEventListener('DOMContentLoaded', setupApp)
+</script>
+<noscript>no javascript</noscript>
+</body>
+</html>
