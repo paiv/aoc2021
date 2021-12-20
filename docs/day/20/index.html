@@ -115,7 +115,8 @@ function sig(y, x, grid, bg) {
     return i
 }
 function enhanceGrid(state) {
-    const {grid, model} = state
+    const {grid, model, gridRect} = state
+    let {left, right, top, bottom} = state.gridRect
     let fringe = new Array()
     for (let [y,r] of state.grid.entries()) {
         for (let [x,c] of r.entries()) {
@@ -125,10 +126,6 @@ function enhanceGrid(state) {
     let bg = model.alg.has(0) ? (model.times % 2) : 0
     let dawn = new Map()
     let seen = new Map()
-    let left = 0
-    let right = 0
-    let top = 0
-    let bottom = 0
     while (fringe.length) {
         let [y,x] = fringe.pop()
         if (seen.has(y) && seen.get(y).get(x)) { continue }
@@ -141,10 +138,12 @@ function enhanceGrid(state) {
         let row = dawn.get(y) || new Map()
         dawn.set(y, row)
         row.set(x, c)
-        left = Math.min(left, x)
-        right = Math.max(right, x)
-        top = Math.min(top, y)
-        bottom = Math.max(bottom, y)
+        if (c || (ingrid && grid.get(y).get(x)) || (y >= top && y <= bottom && x >= left && x <= bottom)) {
+            left = Math.min(left, x)
+            right = Math.max(right, x)
+            top = Math.min(top, y)
+            bottom = Math.max(bottom, y)
+        }
         if (ingrid) {
             for (let [dy,dx] of neib) {
                 fringe.push([y+dy, x+dx])
