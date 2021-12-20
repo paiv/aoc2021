@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Day 20: Trench Map</title>
+
+<style media="screen">
+:root {--bg:#fff; --fg:#000; --lb:#b8b8b8;}
+@media (prefers-color-scheme:dark) {:root {--bg:#202124; --fg:#f1f3f4; --lb:#5F626B}}
+body, body * {background:var(--bg); color:var(--fg);}
+noscript {position:absolute; top:0; left:25%; background-color:magenta; color:white; padding:1em;}
+textarea {margin-top:1em; width:8em; height:16em; white-space:pre; font-family:monospace;}
+#gfx {display:flex; flex-grow:1; user-select:none;}
+#gfx canvas {flex:1 0 auto; height:auto; margin:0 1em 0 2em; image-rendering:pixelated; border:1px var(--lb) solid;}
+.flx {display:flex;}
+.fm {display:flex; flex-direction:column;}
+.fm > * {margin-left: 1em; margin-top: 2em;}
+.tm {font-family:monospace;}
+.fm label {white-space: nowrap;}
+</style>
+
+</head>
+<body>
+
+<a href="../..">paiv</a> ::
+<a href="https://adventofcode.com/2021/day/20">aoc:day/20</a>
+
+<div class="flx">
+
+<div>
+    <textarea id="input" spellcheck="false"
+>..#.#..#####.#.#.#.###.##.....###.##.#..###.####..#####..#....#..#..##..##
+#..######.###...####..#..#####..##..#.#####...##.#.#..#.##..#.#......#.###
+.######.###.####...#.##.##..#..#..#####.....#.#....###..#.##......#.....#.
+.#..#..##..#...##.######.####.####.#.#...#.......#..#.#.#...####.##.#.....
+.#..#...##.#.##..#...##.#.##..###.#......#.#.......#.#.#.####.###.##...#..
+...####.#..#..#.##.#....##..#.####....##...##..#...#......#.#.......#.....
+..##..####..#...#.#.#...##..#.#..###..#####........#..####......#..#
+
+#..#.
+#....
+##..#
+..#..
+..###
+</textarea>
+</div>
+
+<div class="fm">
+    <button type="button" id="play">Enhance</button>
+    <code id="ans"></code>
+</div>
+
+<div id="gfx">
+</div>
+
+</div>
+
+<script type="text/javascript">
+let Renderer = undefined
+let AnimationSpeed = 1
+let State = {}
+function renderString(state) {
+    const miny = [...grid.keys()].reduce((a,y) => Math.min(a,y))
+    const maxy = [...grid.keys()].reduce((a,y) => Math.max(a,y))
+    const minx = [...grid.entries()].reduce((a,p) => Math.min(a,[...p[1].keys()].reduce((a,x) => Math.min(a,x))), 0)
+    const maxx = [...grid.entries()].reduce((a,p) => Math.max(a,[...p[1].keys()].reduce((a,x) => Math.max(a,x))), 0)
+    let so = ''
+    for (let y = miny; y <= maxy; ++y) {
+        for (let x = minx; x <= maxx; ++x) {
+            let c = grid.has(y) && grid.get(y).get(x)
+            so += c ? '#' : '.'
+        }
+        so += '\n'
+    }
+    return so
+}
+function renderAll(state) {
+    const {ctx, grid, gridRect} = state
+    const {left, right, top, bottom, w, h} = gridRect
+    let img = ctx.getImageData(0, 0, w, h)
+    let px = img.data
+    for (let [y,row] of grid.entries()) {
+        if (y < top || y > bottom) { continue }
+        for (let [x,v] of row.entries()) {
+            if (x < left || x > right) { continue }
+            i = ((y-top) * w + (x-left)) * 4
+            px[i+0] = px[i+1] = px[i+2] = v * 220
+        }
+    }
+    ctx.putImageData(img, 0, 0)
+}
+function getAnswer(state) {
+    const {left, right, top, bottom} = state.gridRect
+    let ans = 0
+    for (let [y,row] of state.grid.entries()) {
+        if (y < top || y > bottom) { continue }
+        for (let [x,v] of row.entries()) {
+            if (x < left || x > right) { continue }
+            ans += v
+        }
+    }
+    return ans
+}
+const neib = [[-1,-1], [-1,0], [-1,1], [0,-1], [0,0], [0,1], [1,-1], [1,0], [1,1]]
+function sig(y, x, grid, bg) {
+    let i = 0
+    for (let [dy,dx] of neib) {
+        i *= 2
+        let row = grid.get(y+dy) || new Map()
+        grid.set(y+dy, row)
+        let c = row.has(x+dx) ? row.get(x+dx) : bg
+        i += c
+    }
+    return i
+}
+function enhanceGrid(state) {
+    const {grid, model} = state
+    let fringe = new Array()
+    for (let [y,r] of state.grid.entries()) {
+        for (let [x,c] of r.entries()) {
+            fringe.push([y,x])
+        }
+    }
+    let bg = model.alg.has(0) ? (model.times % 2) : 0
+    let dawn = new Map()
+    let seen = new Map()
+    let left = 0
+    let right = 0
+    let top = 0
+    let bottom = 0
+    while (fringe.length) {
+        let [y,x] = fringe.pop()
+        if (seen.has(y) && seen.get(y).get(x)) { continue }
+        let sx = seen.get(y) || new Map()
+        seen.set(y, sx)
+        sx.set(x, 1)
+        let q = sig(y, x, grid, bg)
+        let c = model.alg.has(q)
+        let ingrid = grid.has(y) && grid.get(y).has(x)
+        let row = dawn.get(y) || new Map()
+        dawn.set(y, row)
+        row.set(x, c)
+        left = Math.min(left, x)
+        right = Math.max(right, x)
+        top = Math.min(top, y)
+        bottom = Math.max(bottom, y)
+        if (ingrid) {
+            for (let [dy,dx] of neib) {
+                fringe.push([y+dy, x+dx])
+            }
+        }
+    }
+    state.grid = dawn
+    state.gridRect = {left, right, top, bottom, w:(right-left+1), h:(bottom-top+1)}
+}
+function explore(state, ts, dt) {
+    switch (state.stage) {
+        case 0: {
+            const {model} = state
+            state.odd = model.alg.has(0)
+            model.ans = getAnswer(state)
+            state.ansel.textContent = model.ans
+            renderAll(state)
+            state.anim = {start:ts, end:(ts + 2000 / AnimationSpeed)}
+            state.stage += 1
+            break
+        }
+        case 1: {
+            if (ts >= state.anim.end) {
+                const {model} = state
+                enhanceGrid(state)
+                model.times += 1
+                if (!state.odd || (AnimationSpeed <= 1) || (model.times % 2 === 0)) {
+                    let {w,h} = state.gridRect
+                    let canvas = state.ctx.canvas
+                    canvas.width = w
+                    canvas.height = h
+                    state.ctx.fillRect(0, 0, w, h)
+                    renderAll(state)
+                }
+                model.ans = getAnswer(state)
+                state.ansel.textContent = model.ans
+                if (model.times >= model.goal) {
+                    state.stage += 1
+                }
+                else {
+                    state.anim = {start:ts, end:(ts + 2000 / AnimationSpeed)}
+                }
+            }
+            break
+        }
+        default: {
+            state.done = true
+        }
+    }
+}
+let lastFrameTimestamp = 0
+function ticker(ts) {
+    if (!lastFrameTimestamp) {
+        lastFrameTimestamp = ts
+    }
+    else {
+        let dt = ts - lastFrameTimestamp
+        lastFrameTimestamp = ts
+        explore(State, ts, dt)
+        if (State.done) {
+            Renderer = undefined
+            return
+        }
+    }
+    if (Renderer) {
+        Renderer = requestAnimationFrame(ticker)
+    }
+}
+function startGame() {
+    if (Renderer) {
+        cancelAnimationFrame(Renderer)
+        Renderer = undefined
+    }
+    document.querySelector('.fm button').blur()
+    const board = document.querySelector('#gfx')
+    while (board.firstChild) {
+        board.removeChild(board.lastChild)
+    }
+    let input = document.getElementById('input').value
+    let [salg, data] = input.trim().split('\n\n')
+    let alg = new Set()
+    for (let [i,c] of [...salg.trim().split(/\s+/).join('')].entries()) {
+        if (c === '#') {
+            alg.add(i)
+        }
+    }
+    data = data.trim().split('\n')
+    const w = data[0].length
+    const h = data.length
+    let grid = new Map()
+    data.forEach((r,y) => [...r].forEach((c,x) => {
+        let row = grid.get(y) || new Map()
+        grid.set(y, row)
+        row.set(x, c === '#')
+    }))
+    let ansel = document.querySelector('#ans')
+    let canvas = document.createElement('canvas')
+    canvas.width = w
+    canvas.height = h
+    let ctx = canvas.getContext('2d')
+    ctx.fillRect(0, 0, w, h)
+    board.appendChild(canvas)
+    State = {
+        stage: 0,
+        grid: grid,
+        gridRect: {left:0, right:(w-1), top:0, bottom:(h-1), w:w, h:h},
+        ctx: ctx,
+        ansel: ansel,
+        model: {times:0, goal:50, ans:0, alg:alg},
+    }
+    lastFrameTimestamp = 0
+    Renderer = requestAnimationFrame(ticker)
+}
+function setupApp() {
+    document.querySelector('.fm #play').addEventListener('click', startGame)
+}
+window.addEventListener('DOMContentLoaded', setupApp)
+</script>
+<noscript>no javascript</noscript>
+</body>
+</html>
