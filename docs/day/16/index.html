@@ -413,7 +413,7 @@ function makeIntegerParser(ui, mq, x, y, w, h) {
                             state.bits_left = 4
                             state.stage = 2
                             widget.setSignBit('?')
-                            widget.setYPos(1)
+                            widget.setYPos(0)
                             mq.send('integer_parser', 'bit_stream', 'bits', 1)
                         }
                         else {
