@@ -846,11 +846,11 @@ function makeMachine(ui, isAluOn) {
         packet_to_alu: makeWire(ui, [30,18], [30,16.5]),
     }
     if (isAluOn) {
-        widgets.alu = makeAlu(ui, mq, 28, 13, 10, 3.5)
+        widgets.alu = makeAlu(ui, mq, 27, 13, 11, 3.5)
         widgets.packet_stack.isAluOn = true
     }
     else {
-        makeWidget(ui, '', 28, 13, 10, 3.5)
+        makeWidget(ui, '', 27, 13, 11, 3.5)
     }
     let state = {halted:false}
     function isRunning() {
@@ -1054,7 +1054,7 @@ function drawBlank() {
     makeWidget(ui, '', 0, 0, 11, 3.5)
     makeWidget(ui, '', 0, 5, 30, 5.5)
     makeWidget(ui, '', 0, 12, 14, 4.5)
-    makeWidget(ui, '', 28, 13, 10, 3.5)
+    makeWidget(ui, '', 27, 13, 11, 3.5)
     makeWidget(ui, '', 0, 18, 38, 8.5)
     makeWire(ui, [11,1], [15,1])
     makeWire(ui, [13,5], [13,2.5], [11,2.5])
