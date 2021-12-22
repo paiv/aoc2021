@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-from functools import reduce
+import math
 from itertools import islice
 
 
@@ -66,7 +66,7 @@ def part2(data):
         elif p == 0:
             return sum(map(eval, pps))
         elif p == 1:
-            return reduce(int.__mul__, map(eval, pps))
+            return math.prod(map(eval, pps))
         elif p == 2:
             return min(map(eval, pps))
         elif p == 3:
