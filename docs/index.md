@@ -3,28 +3,28 @@ title: Advent of Code 2021
 ---
 
 * [Day 4: Giant Squid\
-​<img src="day/4/bingo.png" height="44">](day/4/)
+​<img src="day/4/bingo.png" height="80">](day/4/)
 * [Day 5: Hydrothermal Venture\
-​<img src="day/5/vents.png" height="44">](day/5/)
+​<img src="day/5/vents.png" height="80">](day/5/)
 * [Day 8: Seven Segment Search\
-​<img src="day/8/seven.png" height="44">](day/8/)
+​<img src="day/8/seven.png" height="80">](day/8/)
 * [Day 9: Smoke Basin\
-​<img src="day/9/smog.gif" height="44">](day/9/)
+​<img src="day/9/smog.gif" height="80">](day/9/)
 * [Day 10: Syntax Scoring\
-​<img src="day/10/syntax.gif" height="44">](day/10/)
+​<img src="day/10/syntax.gif" height="80">](day/10/)
 * [Day 11: Dumbo Octopus\
-​<img src="day/11/flash.png" height="44">](day/11/)
+​<img src="day/11/flash.png" height="80">](day/11/)
 * [Day 12: Passage Pathing\
-​<img src="day/12/search.gif" height="44">](day/12/)
+​<img src="day/12/search.gif" height="80">](day/12/)
 * [Day 13: Transparent Origami\
-​<img src="day/13/fold.gif" height="44">](day/13/)
+​<img src="day/13/fold.gif" height="80">](day/13/)
 * [Day 14: Extended Polymerization\
-​<img src="day/14/chart.gif" height="44">](day/14/)
+​<img src="day/14/chart.gif" height="80">](day/14/)
 * [Day 15: Chiton\
-​<img src="day/15/search.gif" height="44">](day/15/)
+​<img src="day/15/search.gif" height="80">](day/15/)
 * [Day 16: Packet Decoder\
-​<img src="day/16/device.gif" height="44">](day/16/)
+​<img src="day/16/device.gif" height="80">](day/16/)
 * [Day 17: Trick Shot\
-​<img src="day/17/probe.gif" height="44">](day/17/)
+​<img src="day/17/probe.gif" height="80">](day/17/)
 * [Day 20: Trench Map\
-​<img src="day/20/enhance.gif" height="44">](day/20/)
+​<img src="day/20/enhance.gif" height="80">](day/20/)
