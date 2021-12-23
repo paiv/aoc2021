@@ -28,3 +28,5 @@ title: Advent of Code 2021
 ​<img src="day/17/probe.gif" height="80">](day/17/)
 * [Day 20: Trench Map\
 ​<img src="day/20/enhance.gif" height="80">](day/20/)
+* [Day 23: Amphipod\
+<img src="day/23/dada.png" height="80">](day/23/)

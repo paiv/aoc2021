@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Day 23: Amphipod</title>
+
+<style media="screen">
+:root {color-scheme:light dark; --bg:#fff; --fg:#000; --lb:#b8b8b8; --lf:#474747;}
+@media (prefers-color-scheme:dark) {:root {--bg:#202124; --fg:#f1f3f4; --lb:#5F626B; --lf:#abadad;}}
+body, body * {background:var(--bg); color:var(--fg);}
+noscript {position:absolute; top:0; left:25%; background:magenta; color:white; padding:1em;}
+textarea {margin-top:1em; width:9em; height:7em; font-family:monospace;}
+#gfx {display:flex; flex-direction:column; flex-grow:1; margin:1rem; font-family:monospace; cursor:default;}
+#gfx > pre {position:relative; margin:0; font-size:xx-large;}
+#gfx > pre > span {position:absolute;}
+.flx {display:flex;}
+.fm > * {margin:2rem 0 0 1rem;}
+#km {position:absolute; top:0; padding:3rem; background:var(--fg); color:var(--bg);}
+.kmoff {display:none;}
+</style>
+
+</head>
+<body>
+
+<a href="../..">paiv</a> ::
+<a href="https://adventofcode.com/2021/day/23">aoc:day/23</a>
+
+<div class="flx">
+
+<div class="fm">
+    <textarea id="input" spellcheck="false"
+>#############
+#...........#
+###B#C#B#D###
+  #A#D#C#A#
+  #########
+</textarea>
+    <div><button type="button" id="play">Play</button>
+        <code id="score">E 0</code></div>
+    <div>
+        <label><input type="checkbox" id="part2"/>part 2</label>
+    </div>
+    <div>
+        <span><code>?</code> keymap</span>
+    </div>
+</div>
+
+<div id="gfx">
+</div>
+
+</div>
+
+<pre id="km" class="kmoff">
+    Keymap
+
+? keymap
+1-4 cycle selection
+a-d cycle selection
+↑↓→← move selection
+Backspace undo
+</pre>
+
+<script type="text/javascript">
+let Symbols = {wall:'#', hall:'.'}
+let Colors = {wall:'var(--lb)', hall:'var(--lf)', pod:'var(--fg)', selectedPod:'#f0f', lockedPod:'var(--lf)'}
+let Energies = {'A':1, 'B':10, 'C':100, 'D':1000}
+let Renderer = undefined
+let AnimationSpeed = 1
+let State = {}
+const svgns = 'http://www.w3.org/2000/svg'
+const cc = (y,x) => y * 10000 + x
+const yx = cc => [Math.floor(cc / 10000), cc % 10000]
+function keyDown(e) {
+    if (e.isComposing || e.altKey || e.ctrlKey || e.metaKey) { return }
+    if (document.activeElement && document.activeElement.tagName !== 'BODY') { return }
+    if (e.key === '?') {
+        let el = document.getElementById('km')
+        el.classList.toggle('kmoff')
+        e.preventDefault()
+        return
+    }
+    const {ui, model} = State
+    if (!ui) { return }
+    switch (e.key) {
+        case 'Down':
+        case 'ArrowDown': ui.moveSelectedPod(1,0); break
+        case 'Up':
+        case 'ArrowUp': ui.moveSelectedPod(-1,0); break
+        case 'Left':
+        case 'ArrowLeft': ui.moveSelectedPod(0,-1); break
+        case 'Right':
+        case 'ArrowRight': ui.moveSelectedPod(0,1); break
+        case 'a': case 'A': ui.cycleSelectedPod(e.key); break
+        case '1': ui.cycleSelectedPod('A'); break
+        case 'b': case 'B': ui.cycleSelectedPod(e.key); break
+        case '2': ui.cycleSelectedPod('B'); break
+        case 'c': case 'C': ui.cycleSelectedPod(e.key); break
+        case '3': ui.cycleSelectedPod('C'); break
+        case 'd': case 'D': ui.cycleSelectedPod(e.key); break
+        case '4': ui.cycleSelectedPod('D'); break
+        case 'Backspace': ui.undoLastMove(); break
+        default: return
+    }
+    e.preventDefault()
+}
+function createBoard(state) {
+    const {ui, model} = state
+    const {canvas, grid} = ui
+    const {walls, halls, pods} = model
+    let bg = [...walls, ...halls]
+    let miny = bg.reduce((a,p) => Math.min(a, yx(p)[0]), Infinity)
+    let maxy = bg.reduce((a,p) => Math.max(a, yx(p)[0]), -Infinity)
+    let minx = bg.reduce((a,p) => Math.min(a, yx(p)[1]), Infinity)
+    let maxx = bg.reduce((a,p) => Math.max(a, yx(p)[1]), -Infinity)
+    ui.boardOffset = {x:minx, y:miny}
+    let cy = cx = 0
+    for(let y = miny; y < maxy+1; ++y) {
+        cy = Math.max(cy, y+1)
+        for (let x = minx; x < maxx+1; ++x) {
+            cx = Math.max(cx, x+1)
+            k = cc(y,x)
+            let so = walls.has(k) ? '#' : (halls.has(k) ? '.' : '\u00A0')
+            let c = walls.has(k) ? Colors.wall : (halls.has(k) ? Colors.hall : undefined)
+            let el = document.createElement('span')
+            canvas.appendChild(el)
+            el.style.left = (x-minx)*grid.dx + 'px'
+            el.style.top = (y-miny)*grid.dy + 'px'
+            el.style.color = c
+            el.textContent = so
+        }
+    }
+    ui.growCanvas(cx, cy)
+    ui.setSelectedPod = (el => {
+        if (ui.selectedPod) {
+            ui.selectedPod.style.color = Colors.pod
+        }
+        if (ui.selectedPod !== el) {
+            ui.selectedPod = el
+            if (el) {
+                el.style.color = Colors.selectedPod
+            }
+        }
+        else {
+            ui.selectedPod = undefined
+        }
+    })
+    ui.cycleSelectedPod = (sym => {
+        let di = /[a-d]/.test(sym) ? -1 : 1
+        sym = sym.toUpperCase()
+        let k = ui.selectedPod ? ui.selectedPod.podidx : -1
+        for (let i = 1; i < model.pods.length; ++i) {
+            let q = (k + i * di + model.pods.length) % model.pods.length
+            let to = model.pods[q]
+            if (to.c === sym) {
+                ui.setSelectedPod(ui.pods[q])
+                break
+            }
+        }
+    })
+    ui.pods = new Array()
+    for (let [i, pod] of pods.entries()) {
+        let [y,x] = yx(pod.p)
+        let el = document.createElement('span')
+        canvas.appendChild(el)
+        ui.pods.push(el)
+        el.podidx = i
+        el.style.left = (x-minx)*grid.dx + 'px'
+        el.style.top = (y-miny)*grid.dy + 'px'
+        el.style.color = Colors.pod
+        el.textContent = pod.c
+        el.addEventListener('click', (e) => {e.preventDefault(); e.stopPropagation(); ui.setSelectedPod(el)})
+    }
+    canvas.addEventListener('click', (e) => {e.preventDefault(); ui.setSelectedPod()})
+    ui.moveSelectedPod = (dy,dx) => {
+        let el = ui.selectedPod
+        if (!el) { return }
+        const {grid, boardOffset} = ui
+        let pid = el.podidx
+        let pod = model.pods[pid]
+        let [y,x] = yx(pod.p)
+        y += dy
+        x += dx
+        let to = cc(y,x)
+        if (!model.halls.has(to)) { return }
+        if (!model.pods.every((p,i) => (i === pid) || (p.p !== to))) { return }
+        pod.p = to
+        model.score += pod.e
+        model.log.push([pid, dy, dx])
+        ui.setScore(model.score)
+        el.style.left = (x-boardOffset.x)*grid.dx + 'px'
+        el.style.top = (y-boardOffset.y)*grid.dy + 'px'
+    }
+    ui.setScore(model.score)
+    ui.undoLastMove = () => {
+        let entry = model.log.pop()
+        if (!entry) { return }
+        let [pid, dy, dx] = entry
+        let pod = model.pods[pid]
+        let [y,x] = yx(pod.p)
+        y -= dy
+        x -= dx
+        let to = cc(y,x)
+        pod.p = to
+        model.score -= pod.e
+        ui.setScore(model.score)
+        const {grid, boardOffset} = ui
+        let el = ui.pods[pid]
+        el.style.left = (x-boardOffset.x)*grid.dx + 'px'
+        el.style.top = (y-boardOffset.y)*grid.dy + 'px'
+    }
+}
+function clear(el) {
+    while (el.firstChild) { el.removeChild(el.lastChild) }
+}
+function measureGrid(canvas) {
+    let sample = document.createElement('span')
+    sample.textContent = 'B'
+    canvas.appendChild(sample)
+    let bbox = sample.getBoundingClientRect()
+    canvas.removeChild(sample)
+    return {dx:bbox.width, dy:bbox.height, zoom:1}
+}
+function startGame() {
+    document.querySelector('.fm button').blur()
+    const ansel = document.getElementById('score')
+    const board = document.getElementById('gfx')
+    clear(board)
+    let input = document.getElementById('input').value
+    let lines = input.trim().split('\n')
+    let isPart2 = document.getElementById('part2').checked
+    if (isPart2) {
+        let i = lines.findIndex(s => /\w/.test(s))
+        if (i >= 0) {
+            lines.splice(i+1, 0, '  #D#C#B#A#', '  #D#B#A#C#')
+        }
+    }
+    let data = lines.reduce((a,s,y) => a.concat(s.split('').map((c,x) => [cc(y,x),c])), [])
+    let walls = new Set(data.filter(a => a[1] === '#').map(a => a[0]))
+    let halls = new Set(data.filter(a => /[.\w]/.test(a[1])).map(a => a[0]))
+    let pods = data.filter(a => /\w/.test(a[1])).map(a => ({p:a[0], c:a[1]}))
+    pods.forEach(p => {p.e = Energies[p.c]})
+    let podFlags = pods.map(p => 0)
+    let canvas = document.createElement('pre')
+    board.appendChild(canvas)
+    const grid = measureGrid(canvas)
+    let ui = {
+        grid,
+        canvas: canvas,
+        canvasSize: {w:1, h:1},
+    }
+    ui.growCanvas = ((right, bottom) => {
+        let {w,h} = ui.canvasSize
+        w = Math.max(w, right)
+        h = Math.max(h, bottom)
+        ui.canvasSize = {w,h}
+        ui.canvas.style.width = (w * grid.dx + 1) + 'px'
+        ui.canvas.style.height = (h * grid.dy + 1) + 'px'
+    }),
+    ui.setScore = (s => {
+        ansel.textContent = 'E ' + s
+    })
+    State = {
+        stage: 0,
+        ui: ui,
+        model: {score:0, walls, halls, pods, flags:podFlags, log:[]},
+    }
+    createBoard(State)
+}
+function setupApp() {
+    document.querySelector('.fm #play').addEventListener('click', startGame)
+    document.addEventListener('keydown', keyDown)
+}
+window.addEventListener('DOMContentLoaded', setupApp)
+</script>
+<noscript>no javascript</noscript>
+</body>
+</html>
