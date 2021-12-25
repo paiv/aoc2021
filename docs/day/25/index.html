@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Day 25: Sea Cucumber</title>
+
+<style media="screen">
+:root {--bg:#fff; --fg:#000; --lb:#b8b8b8;}
+@media (prefers-color-scheme:dark) {:root {--bg:#202124; --fg:#f1f3f4; --lb:#5F626B}}
+body, body * {background:var(--bg); color:var(--fg);}
+noscript {position:absolute; top:0; left:25%; background-color:magenta; color:white; padding:1em;}
+textarea {margin-top:1em; width:8em; height:16em; white-space:pre; font-family:monospace;}
+#gfx {display:flex; flex-grow:1; user-select:none;}
+#gfx canvas {flex:1 0 auto; height:auto; max-width:40em; margin:0 1em 0 2em; image-rendering:pixelated; border:1px var(--lb) solid;}
+.flx {display:flex;}
+.fm > * {margin:1rem 0 0 0rem;}
+#speed {width:4em;}
+</style>
+
+</head>
+<body>
+
+<a href="../..">paiv</a> ::
+<a href="https://adventofcode.com/2021/day/25">aoc:day/25</a>
+
+<div class="flx">
+
+<div class="fm">
+    <div>
+    <textarea id="input" spellcheck="false"
+>v...&gt;&gt;.vv&gt;
+.vv&gt;&gt;.vv..
+&gt;&gt;.&gt;v&gt;...v
+&gt;&gt;v&gt;&gt;.&gt;.v.
+v&gt;v.vv.v..
+&gt;.&gt;&gt;..v...
+.vv..&gt;.&gt;v.
+v.v..&gt;&gt;v.v
+....v..v.&gt;
+</textarea>
+    </div>
+    <div>
+        <button type="button" id="play">Play</button>
+    </div>
+    <div>
+        <code id="ans"></code>
+    </div>
+    <div><form id="sform">
+        <label for="speed" title="Speed">⌁</label>
+        <input type="number" id="speed" value="1" min="0"/>
+    </form></div>
+</div>
+
+<div id="gfx">
+</div>
+
+</div>
+
+<script type="text/javascript">
+let Renderer = undefined
+let AnimationSpeed = 1
+let Colors = {'.':[12,9,10], '>':[166, 206, 227], 'v':[31, 120, 180]}
+let State = {}
+function renderAll(state) {
+    const {ctx, model} = state
+    const {grid} = model
+    let w = grid[0].length
+    let h = grid.length
+    let img = ctx.getImageData(0, 0, w, h)
+    let px = img.data
+    for (let y = 0, i = 0; y < h; ++y) {
+        for (let x = 0; x < w; ++x, ++i) {
+            let q = grid[y][x]
+            let cs = Colors[q]
+            for (let c of cs) {
+                px[i++] = c
+            }
+        }
+    }
+    ctx.putImageData(img, 0, 0)
+}
+function evolve(dusk) {
+    let w = dusk[0].length
+    let h = dusk.length
+    let changed = false
+    let dawn = dusk.map(r => r.map(x => (x === '>' ? '.' : x)))
+    for (let [y,row] of dusk.entries()) {
+        for (let [x,c] of row.entries()) {
+            if (c === '>') {
+                let qy = y
+                let qx = (x + 1) % w
+                let q = dusk[qy][qx]
+                if (q === '.') {
+                    dawn[qy][qx] = c
+                    changed = true
+                }
+                else {
+                    dawn[y][x] = c
+                }
+            }
+        }
+    }
+    let day = dawn.map(r => r.map(x => (x === 'v' ? '.' : x)))
+    for (let [y,row] of dawn.entries()) {
+        for (let [x,c] of row.entries()) {
+            if (c === 'v') {
+                let qy = (y + 1) % h
+                let qx = x
+                let q = dawn[qy][qx]
+                if (q === '.') {
+                    day[qy][qx] = c
+                    changed = true
+                }
+                else {
+                    day[y][x] = c
+                }
+            }
+        }
+    }
+    return [day, !changed]
+}
+function explore(state, ts, dt) {
+    switch (state.stage) {
+        case 0: {
+            const {model} = state
+            state.ansel.textContent = 'T ' + model.times
+            renderAll(state)
+            state.anim = {start:ts, end:(ts + 2000 / AnimationSpeed)}
+            state.stage += 1
+            break
+        }
+        case 1: {
+            if (ts >= state.anim.end) {
+                const {model} = state
+                let [grid, done] = evolve(model.grid)
+                model.grid = grid
+                model.times += 1
+                state.ansel.textContent = 'T ' + model.times
+                renderAll(state)
+                if (done) {
+                    state.stage += 1
+                }
+                else {
+                    state.anim = {start:ts, end:(ts + 2000 / AnimationSpeed)}
+                }
+            }
+            break
+        }
+        default: {
+            state.done = true
+        }
+    }
+}
+let lastFrameTimestamp = 0
+function ticker(ts) {
+    if (!lastFrameTimestamp) {
+        lastFrameTimestamp = ts
+    }
+    else {
+        let dt = ts - lastFrameTimestamp
+        lastFrameTimestamp = ts
+        explore(State, ts, dt)
+        if (State.done) {
+            Renderer = undefined
+            return
+        }
+    }
+    if (Renderer) {
+        Renderer = requestAnimationFrame(ticker)
+    }
+}
+function animate() {
+    if (!Renderer) {
+        lastFrameTimestamp = 0
+        State.done = false
+        Renderer = requestAnimationFrame(ticker)
+    }
+}
+function pauseAnimation() {
+    if (Renderer) {
+        cancelAnimationFrame(Renderer)
+        Renderer = undefined
+    }
+}
+function clear(el) {
+    while (el.firstChild) { el.removeChild(el.lastChild) }
+}
+function startGame() {
+    pauseAnimation()
+    document.querySelector('.fm button').blur()
+    const board = document.querySelector('#gfx')
+    clear(board)
+    let input = document.getElementById('input').value
+    let data = input.trim().split('\n').map(s => [...s])
+    const w = data[0].length
+    const h = data.length
+    let ansel = document.querySelector('#ans')
+    let canvas = document.createElement('canvas')
+    canvas.width = w
+    canvas.height = h
+    let ctx = canvas.getContext('2d')
+    ctx.fillRect(0, 0, w, h)
+    board.appendChild(canvas)
+    State = {
+        stage: 0,
+        ctx: ctx,
+        ansel: ansel,
+        model: {times:0, grid:data},
+    }
+    animate()
+}
+function speedInput(e) {
+    e.preventDefault()
+    let el = document.getElementById('speed')
+    let x = parseFloat(el.value)
+    if (el.value === '0') {
+        let step = el.getAttribute('step')
+        if (AnimationSpeed === 1) {
+            x = 0.9
+            step = 0.1
+        }
+        else if (AnimationSpeed === 0.1) {
+            x = 0.09
+            step = 0.01
+        }
+        else {
+            step = 1
+        }
+        el.value = x
+        el.setAttribute('step', step)
+    }
+    else if (el.value === '1') {
+        if (AnimationSpeed === 0.9) {
+            el.setAttribute('step', 1)
+        }
+    }
+    else if (el.value === '0.1') {
+        if (AnimationSpeed === 0.09) {
+            el.setAttribute('step', 0.1)
+        }
+    }
+    if (x > 0) {
+        AnimationSpeed = x
+        animate()
+    }
+    else {
+        pauseAnimation()
+    }
+}
+function setupApp() {
+    document.getElementById('play').addEventListener('click', startGame)
+    document.getElementById('sform').addEventListener('submit', speedInput)
+    let el = document.getElementById('speed')
+    el.addEventListener('input', speedInput)
+    el.value = AnimationSpeed
+}
+window.addEventListener('DOMContentLoaded', setupApp)
+</script>
+<noscript>no javascript</noscript>
+</body>
+</html>

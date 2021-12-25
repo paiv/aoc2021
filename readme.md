@@ -14,3 +14,4 @@ https://paiv.github.io/aoc2021/
 [![](docs/day/15/search.gif)](https://paiv.github.io/aoc2021/day/15/)
 [![](docs/day/16/device.gif)](https://paiv.github.io/aoc2021/day/16/)
 [![](docs/day/17/probe.gif)](https://paiv.github.io/aoc2021/day/17/)
+[![](docs/day/25/flock.gif)](https://paiv.github.io/aoc2021/day/25/)
