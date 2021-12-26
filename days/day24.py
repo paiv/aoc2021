@@ -150,6 +150,30 @@ def solve(data, reverse):
     return sum((10**i * x) for i,x in enumerate(reversed(p)))
 
 
+def solve(data, reverse):
+    lines = data.strip().splitlines()
+    params = [[lines[i+4], lines[i+5], lines[i+15]] for i in range(0, len(lines), 18)]
+    params = [[int(s.split()[-1]) for s in p] for p in params]
+
+    p = [None] * len(params)
+    stack = list()
+    for i,(u,t,q) in enumerate(params):
+        if u == 1:
+            stack.append((i,q))
+        else:
+            j,q = stack.pop()
+            if reverse:
+                p[j] = 9 - max(0, q+t)
+                p[i] = 9 + min(0, q+t)
+            else:
+                p[j] = 1 - min(0, q+t)
+                p[i] = 1 + max(0, q+t)
+
+    z = run_test(data, p, 'z')
+    assert z == 0, (z, p)
+    return sum((10**i * x) for i,x in enumerate(reversed(p)))
+
+
 def sat_solve(data, reverse):
     import z3
     lines = data.strip().splitlines()
