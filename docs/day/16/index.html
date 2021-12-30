@@ -865,7 +865,7 @@ function makeMachine(ui, isAluOn) {
     function reset(data) {
         mq.clear()
         mq.signal('packet_stack', 'restart')
-        mq.signal('alu', 'reset')
+        if (isAluOn) { mq.signal('alu', 'reset') }
         mq.signal('packet_assembler', 'reset')
         mq.signal('integer_parser', 'reset')
         mq.signal('bit_stream', 'reset')
