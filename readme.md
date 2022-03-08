@@ -1,5 +1,8 @@
 paiv – Advent of Code 2021
 ==
+
+[![standwithukraine](https://user-images.githubusercontent.com/196601/157240309-c95307b9-cfb2-44ae-bb69-78173263c6ba.svg)](https://ukrainewar.carrd.co/)
+
 https://adventofcode.com/2021/
 
 Interactive visualizations
